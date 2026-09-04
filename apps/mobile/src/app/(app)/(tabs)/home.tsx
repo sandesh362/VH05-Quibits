@@ -18,7 +18,8 @@ import { PressableRow, EmptyState, ErrorState, LoadingState, SkeletonList } from
 import { IncidentRow } from '@/components/list-rows';
 import { relativeTime } from '@/lib/format';
 import { errorMessage } from '@/api/errors';
-import { colors, spacing, type as typeScale } from '@/theme/tokens';
+import { spacing, type as typeScale } from '@/theme/tokens';
+import { useTheme } from '@/theme/theme-context';
 
 const QUICK_ACTIONS = [
   { label: 'Ask Assistant', icon: '✦', route: '/(app)/(tabs)/assistant' },
@@ -29,6 +30,7 @@ const QUICK_ACTIONS = [
 
 export default function HomeScreen(): React.JSX.Element {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const { isOnline } = useNetwork();
   const userId = user?.id ?? '';
   const overview = useHomeOverview(userId);
@@ -52,22 +54,26 @@ export default function HomeScreen(): React.JSX.Element {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['bottom']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]} edges={['bottom']}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor={colors.primary} />}
       >
-        <View style={styles.header}>
+        <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>Hi, {firstName}</Text>
-            <Text style={styles.role} numberOfLines={1}>
+            <Text style={[styles.eyebrow, { color: colors.primary }]}>Field dashboard</Text>
+            <Text style={[styles.greeting, { color: colors.text }]}>Hi, {firstName}</Text>
+            <Text style={[styles.role, { color: colors.textMuted }]} numberOfLines={1}>
               {user?.fullName} · {user?.role}
             </Text>
           </View>
           {!isOnline ? <Badge icon="⊘" label="Offline" tone="warn" /> : null}
         </View>
 
-        <SectionTitle>Your work</SectionTitle>
+        <View style={styles.sectionHeader}>
+          <SectionTitle>Your work</SectionTitle>
+          <Text style={[styles.sectionHint, { color: colors.textSubtle }]}>Live queue</Text>
+        </View>
         {overview.isInitialLoading ? (
           <SkeletonList rows={2} />
         ) : overview.isError && !data ? (
@@ -79,7 +85,7 @@ export default function HomeScreen(): React.JSX.Element {
           </View>
         )}
         {overview.isError && data ? (
-          <Text style={styles.staleNote}>Offline — counts are a saved copy.</Text>
+          <Text style={[styles.staleNote, { color: colors.warn }]}>Offline — counts are a saved copy.</Text>
         ) : null}
         {!overview.isError ? (
           <View style={styles.statGrid}>
@@ -88,7 +94,9 @@ export default function HomeScreen(): React.JSX.Element {
           </View>
         ) : null}
 
-        <SectionTitle>Quick actions</SectionTitle>
+        <View style={styles.sectionHeader}>
+          <SectionTitle>Quick actions</SectionTitle>
+        </View>
         <View style={styles.quickGrid}>
           {QUICK_ACTIONS.map((action) => (
             <Button
@@ -103,12 +111,12 @@ export default function HomeScreen(): React.JSX.Element {
 
         <SectionTitle>Pending offline changes</SectionTitle>
         <Card>
-          <Text style={styles.syncLine}>
+          <Text style={[styles.syncLine, { color: colors.text }]}>
             {(sync.data?.pending ?? 0) + (sync.data?.review ?? 0) === 0
               ? 'Everything is synced.'
               : `${sync.data?.pending ?? 0} pending · ${sync.data?.review ?? 0} need review · ${sync.data?.failed ?? 0} failed`}
           </Text>
-          <Text style={styles.syncTime}>Last sync: {relativeTime(sync.data?.lastSyncAt)}</Text>
+          <Text style={[styles.syncTime, { color: colors.textMuted }]}>Last sync: {relativeTime(sync.data?.lastSyncAt)}</Text>
           <View style={styles.syncActions}>
             <Button label="Sync now" variant="secondary" onPress={() => void syncNow()} loading={!isOnline ? false : undefined} disabled={!isOnline} />
             <Button label="Details" variant="ghost" onPress={() => router.push('/(app)/(tabs)/profile')} />
@@ -141,8 +149,8 @@ export default function HomeScreen(): React.JSX.Element {
               >
                 <View style={styles.recentRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>{machine.label}</Text>
-                    {machine.subtitle ? <Text style={styles.rowSub}>{machine.subtitle}</Text> : null}
+                    <Text style={[styles.rowTitle, { color: colors.text }]}>{machine.label}</Text>
+                    {machine.subtitle ? <Text style={[styles.rowSub, { color: colors.textMuted }]}>{machine.subtitle}</Text> : null}
                   </View>
                   <Badge icon="⚙" label="Machine" tone="neutral" size="sm" testID={`recent-machine-${machine.id}`} />
                 </View>
@@ -156,19 +164,30 @@ export default function HomeScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bg },
-  content: { padding: spacing.md, paddingBottom: spacing.xl },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md },
-  greeting: { color: colors.text, fontSize: typeScale.title, fontWeight: '800' },
-  role: { color: colors.textMuted, fontSize: typeScale.small, marginTop: 2 },
-  statGrid: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  quickButton: { flexGrow: 1, minWidth: '46%' },
-  syncLine: { color: colors.text, fontSize: typeScale.body, fontWeight: '600' },
-  syncTime: { color: colors.textMuted, fontSize: typeScale.small, marginTop: 2, marginBottom: spacing.sm },
-  syncActions: { flexDirection: 'row', gap: spacing.sm },
-  staleNote: { color: colors.warn, fontSize: typeScale.tiny, marginBottom: spacing.sm },
+  screen: { flex: 1 },
+  content: { padding: spacing.md, paddingBottom: spacing.xl + spacing.md },
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 14,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  eyebrow: { fontSize: typeScale.tiny, fontWeight: '800', textTransform: 'uppercase', marginBottom: 4 },
+  greeting: { fontSize: typeScale.title, fontWeight: '800' },
+  role: { fontSize: typeScale.small, marginTop: 4 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  sectionHint: { fontSize: typeScale.tiny, fontWeight: '700' },
+  statGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.md },
+  quickButton: { flexGrow: 1, minWidth: '45%', marginBottom: 0 },
+  syncLine: { fontSize: typeScale.body, fontWeight: '700' },
+  syncTime: { fontSize: typeScale.small, marginTop: 4, marginBottom: spacing.md },
+  syncActions: { flexDirection: 'row', gap: spacing.md },
+  staleNote: { fontSize: typeScale.tiny, marginBottom: spacing.sm },
   recentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  rowTitle: { color: colors.text, fontSize: typeScale.body, fontWeight: '600' },
-  rowSub: { color: colors.textMuted, fontSize: typeScale.small },
+  rowTitle: { fontSize: typeScale.body, fontWeight: '600' },
+  rowSub: { fontSize: typeScale.small },
 });

@@ -7,13 +7,15 @@
  */
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from './ui';
-import { colors, radius, spacing, type as typeScale } from '@/theme/tokens';
+import { radius, spacing, type as typeScale } from '@/theme/tokens';
+import { useTheme } from '@/theme/theme-context';
 
 export function OfflineBanner({ visible }: { visible: boolean }): React.JSX.Element | null {
+  const { colors } = useTheme();
   if (!visible) return null;
   return (
-    <View style={[styles.banner, { borderColor: colors.warn }]} accessibilityLabel="You are offline">
-      <Text style={styles.icon} aria-hidden>
+    <View style={[styles.banner, { backgroundColor: colors.surface, borderColor: colors.warn }]} accessibilityLabel="You are offline">
+      <Text style={[styles.icon, { color: colors.warn }]} aria-hidden>
         ⊘
       </Text>
       <Text style={[styles.text, { color: colors.warn }]}>
@@ -32,6 +34,7 @@ export function PendingSyncBanner({
   review: number;
   onPress: () => void;
 }): React.JSX.Element | null {
+  const { colors } = useTheme();
   if (pending <= 0 && review <= 0) return null;
   const tone = review > 0 ? colors.error : colors.info;
   return (
@@ -39,9 +42,9 @@ export function PendingSyncBanner({
       accessibilityRole="button"
       accessibilityLabel={`${pending} pending changes. Open sync status.`}
       onPress={onPress}
-      style={[styles.banner, { borderColor: tone }]}
+      style={[styles.banner, { backgroundColor: colors.surface, borderColor: tone }]}
     >
-      <Text style={styles.icon} aria-hidden>
+      <Text style={[styles.icon, { color: tone }]} aria-hidden>
         ↻
       </Text>
       <Text style={[styles.text, { color: tone }]}>
@@ -80,12 +83,13 @@ export function ConfirmDialog({
   children,
   testID,
 }: ConfirmDialogProps): React.JSX.Element {
+  const { colors } = useTheme();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={styles.backdrop}>
-        <View style={styles.dialog} accessibilityViewIsModal testID={testID}>
-          <Text style={styles.title}>{title}</Text>
-          {message ? <Text style={styles.message}>{message}</Text> : null}
+        <View style={[styles.dialog, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong }]} accessibilityViewIsModal testID={testID}>
+          <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+          {message ? <Text style={[styles.message, { color: colors.textMuted }]}>{message}</Text> : null}
           {children}
           <View style={styles.actions}>
             <Button label={cancelLabel} variant="secondary" onPress={onCancel} disabled={loading} style={styles.action} />
@@ -109,7 +113,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.surface,
     borderWidth: 1,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
@@ -117,7 +120,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
   },
-  icon: { fontSize: 18, color: colors.warn },
+  icon: { fontSize: 18 },
   text: { flex: 1, fontSize: typeScale.small },
   backdrop: {
     flex: 1,
@@ -129,14 +132,12 @@ const styles = StyleSheet.create({
   dialog: {
     width: '100%',
     maxWidth: 480,
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.borderStrong,
     borderWidth: 1,
     borderRadius: radius.lg,
     padding: spacing.lg,
   },
-  title: { color: colors.text, fontSize: typeScale.heading, fontWeight: '700', marginBottom: spacing.sm },
-  message: { color: colors.textMuted, fontSize: typeScale.body, marginBottom: spacing.md },
+  title: { fontSize: typeScale.heading, fontWeight: '700', marginBottom: spacing.sm },
+  message: { fontSize: typeScale.body, marginBottom: spacing.md },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   action: { flex: 1 },
 });

@@ -18,7 +18,7 @@ import { AuthProvider, useAuth } from '@/auth/auth-context';
 import { useOnlineManager } from '@/hooks/use-network';
 import { authRedirect } from '@/lib/navigation';
 import { initDatabase } from '@/db/database';
-import { colors } from '@/theme/tokens';
+import { ThemeProvider, useTheme } from '@/theme/theme-context';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -64,7 +64,16 @@ function AuthGate({ children }: { children: React.ReactNode }): React.JSX.Elemen
 }
 
 export default function RootLayout(): React.JSX.Element {
+  return (
+    <ThemeProvider>
+      <RootLayoutContent />
+    </ThemeProvider>
+  );
+}
+
+function RootLayoutContent(): React.JSX.Element {
   const [ready, setReady] = useState(false);
+  const theme = useTheme();
   useEffect(() => {
     // Give the DB a tick to initialize before rendering routes.
     setReady(true);
@@ -75,10 +84,10 @@ export default function RootLayout(): React.JSX.Element {
   const screenOptions = useMemo(
     () => ({
       headerShown: false,
-      contentStyle: { backgroundColor: colors.bg },
+      contentStyle: { backgroundColor: theme.colors.bg },
       animation: Platform.OS === 'android' ? ('fade_from_bottom' as const) : ('default' as const),
     }),
-    [],
+    [theme.colors.bg],
   );
 
   return (
@@ -95,7 +104,7 @@ export default function RootLayout(): React.JSX.Element {
                   <Stack.Screen name="+not-found" />
                 </Stack>
               ) : null}
-              <StatusBar style="light" />
+              <StatusBar style={theme.isDark ? 'light' : 'dark'} />
             </AuthGate>
           </AuthProvider>
         </QueryClientProvider>

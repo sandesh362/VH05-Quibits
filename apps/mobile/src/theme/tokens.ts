@@ -6,7 +6,31 @@
  * colour alone - every badge pairs colour with an icon and a text label
  * (frontend/src/lib/labels.ts convention).
  */
-export const colors = {
+export interface AppColors {
+  bg: string;
+  surface: string;
+  surfaceRaised: string;
+  border: string;
+  borderStrong: string;
+  text: string;
+  textMuted: string;
+  textSubtle: string;
+  ok: string;
+  okBg: string;
+  warn: string;
+  warnBg: string;
+  error: string;
+  errorBg: string;
+  info: string;
+  infoBg: string;
+  neutral: string;
+  neutralBg: string;
+  primary: string;
+  primaryBg: string;
+  onPrimary: string;
+}
+
+export const darkColors: AppColors = {
   bg: '#0f1115',
   surface: '#171a21',
   surfaceRaised: '#1e222b',
@@ -33,6 +57,37 @@ export const colors = {
   primaryBg: 'rgba(68, 147, 248, 0.16)',
   onPrimary: '#0b1220',
 } as const;
+
+export const lightColors: AppColors = {
+  bg: '#f6f8fb',
+  surface: '#ffffff',
+  surfaceRaised: '#eef3f8',
+  border: '#d7dee8',
+  borderStrong: '#bcc8d6',
+
+  text: '#111827',
+  textMuted: '#5b6678',
+  textSubtle: '#7b8797',
+
+  ok: '#1f8f45',
+  okBg: 'rgba(31, 143, 69, 0.12)',
+  warn: '#a15c00',
+  warnBg: 'rgba(161, 92, 0, 0.12)',
+  error: '#c92a2a',
+  errorBg: 'rgba(201, 42, 42, 0.1)',
+  info: '#2563eb',
+  infoBg: 'rgba(37, 99, 235, 0.11)',
+  neutral: '#64748b',
+  neutralBg: 'rgba(100, 116, 139, 0.12)',
+
+  primary: '#1d4ed8',
+  primaryBg: 'rgba(29, 78, 216, 0.12)',
+  onPrimary: '#ffffff',
+};
+
+export const colors = darkColors;
+
+export type ThemeMode = 'light' | 'dark';
 
 export const toneColor = {
   ok: colors.ok,

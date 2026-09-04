@@ -4,7 +4,8 @@
  */
 import { Tabs } from 'expo-router';
 import { Text, StyleSheet } from 'react-native';
-import { colors, type as typeScale } from '@/theme/tokens';
+import { type as typeScale } from '@/theme/tokens';
+import { useTheme } from '@/theme/theme-context';
 
 const ICONS: Record<string, string> = {
   home: '⌂',
@@ -15,6 +16,7 @@ const ICONS: Record<string, string> = {
 };
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }): React.JSX.Element {
+  const { colors } = useTheme();
   return (
     <Text style={[styles.icon, { color: focused ? colors.primary : colors.textMuted }]} aria-hidden>
       {ICONS[name] ?? '·'}
@@ -23,6 +25,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }): React.J
 }
 
 export default function TabsLayout(): React.JSX.Element {
+  const { colors } = useTheme();
   return (
     <Tabs
       screenOptions={{

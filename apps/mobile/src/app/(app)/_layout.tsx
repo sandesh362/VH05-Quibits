@@ -13,10 +13,11 @@ import { useNetwork } from '@/hooks/use-network';
 import { useSyncStatus } from '@/hooks/queries';
 import { OfflineBanner, PendingSyncBanner } from '@/components/banners';
 import { initDatabase } from '@/db/database';
-import { colors } from '@/theme/tokens';
+import { useTheme } from '@/theme/theme-context';
 
 export default function ProtectedLayout(): React.JSX.Element {
   const { user } = useAuth();
+  const { colors } = useTheme();
   const { isOnline } = useNetwork();
   const [visible, setVisible] = useState(true);
   const sync = useSyncStatus(user?.id ?? '', false);

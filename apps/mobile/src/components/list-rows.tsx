@@ -27,6 +27,7 @@ import {
 } from '@/lib/labels';
 import { formatBytes, formatDateTime, relativeTime } from '@/lib/format';
 import { colors, radius, spacing, type as typeScale } from '@/theme/tokens';
+import { useTheme } from '@/theme/theme-context';
 
 export interface RowAction {
   onPress: () => void;
@@ -34,6 +35,7 @@ export interface RowAction {
 }
 
 export function IncidentRow({ incident, onPress }: { incident: IncidentView; onPress: () => void }): React.JSX.Element {
+  const theme = useTheme();
   const sev = severityPresentation(incident.severity);
   const status = incidentStatus(incident.status);
   const issue = issueStatus(incident.issueStatus);
@@ -42,24 +44,27 @@ export function IncidentRow({ incident, onPress }: { incident: IncidentView; onP
       accessibilityRole="button"
       accessibilityLabel={`${incident.incidentNumber}. ${incident.title}. Severity ${sev.label}. Status ${status.label}.`}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, { opacity: pressed ? 0.7 : 1 }]}
+      style={({ pressed }) => [
+        styles.row,
+        { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, opacity: pressed ? 0.7 : 1 },
+      ]}
     >
       <View style={styles.rowHeader}>
-        <Text style={styles.rowNumber} numberOfLines={1}>
+        <Text style={[styles.rowNumber, { color: theme.colors.textSubtle }]} numberOfLines={1}>
           {incident.incidentNumber}
         </Text>
         <Badge {...sev} size="sm" />
       </View>
-      <Text style={styles.rowTitle} numberOfLines={2}>
+      <Text style={[styles.rowTitle, { color: theme.colors.text }]} numberOfLines={2}>
         {incident.title}
       </Text>
-      <Text style={styles.rowSub} numberOfLines={1}>
+      <Text style={[styles.rowSub, { color: theme.colors.textMuted }]} numberOfLines={1}>
         {incident.machineLabel ?? incident.machineModelLabel ?? 'No machine link'}
       </Text>
       <View style={styles.badgeRow}>
         <Badge {...status} size="sm" />
         <Badge {...issue} size="sm" />
-        <Text style={styles.rowTime}>{relativeTime(incident.updatedAt)}</Text>
+        <Text style={[styles.rowTime, { color: theme.colors.textSubtle }]}>{relativeTime(incident.updatedAt)}</Text>
       </View>
     </Pressable>
   );
@@ -278,26 +283,27 @@ export function OutboxOpRow({
   onDiscard?: () => void;
   onReview?: () => void;
 }): React.JSX.Element {
+  const theme = useTheme();
   const presentation = syncOpStatus(op.status);
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       <View style={styles.rowHeader}>
-        <Text style={[styles.rowTitle, { flexShrink: 1 }]} numberOfLines={1}>
+        <Text style={[styles.rowTitle, { color: theme.colors.text, flexShrink: 1 }]} numberOfLines={1}>
           {outboxOpLabel[op.type] ?? op.type}
         </Text>
         <Badge {...presentation} size="sm" />
       </View>
-      <Text style={styles.rowSub}>{formatDateTime(op.createdAt)}</Text>
-      {op.lastError ? <Text style={[styles.rowSub, { color: colors.error }]}>{op.lastError}</Text> : null}
+      <Text style={[styles.rowSub, { color: theme.colors.textMuted }]}>{formatDateTime(op.createdAt)}</Text>
+      {op.lastError ? <Text style={[styles.rowSub, { color: theme.colors.error }]}>{op.lastError}</Text> : null}
       <View style={styles.badgeRow}>
         {onRetry ? (
-          <Pressable accessibilityRole="button" onPress={onRetry} style={styles.inlineButton}>
-            <Text style={styles.inlineButtonText}>Retry</Text>
+          <Pressable accessibilityRole="button" onPress={onRetry} style={[styles.inlineButton, { borderColor: theme.colors.primary }]}>
+            <Text style={[styles.inlineButtonText, { color: theme.colors.primary }]}>Retry</Text>
           </Pressable>
         ) : null}
         {onReview ? (
-          <Pressable accessibilityRole="button" onPress={onReview} style={styles.inlineButton}>
-            <Text style={styles.inlineButtonText}>Review</Text>
+          <Pressable accessibilityRole="button" onPress={onReview} style={[styles.inlineButton, { borderColor: theme.colors.primary }]}>
+            <Text style={[styles.inlineButtonText, { color: theme.colors.primary }]}>Review</Text>
           </Pressable>
         ) : null}
         {onDiscard ? (
@@ -305,9 +311,9 @@ export function OutboxOpRow({
             accessibilityRole="button"
             accessibilityLabel="Discard this queued change"
             onPress={onDiscard}
-            style={[styles.inlineButton, { borderColor: colors.error }]}
+            style={[styles.inlineButton, { borderColor: theme.colors.error }]}
           >
-            <Text style={[styles.inlineButtonText, { color: colors.error }]}>Discard</Text>
+            <Text style={[styles.inlineButtonText, { color: theme.colors.error }]}>Discard</Text>
           </Pressable>
         ) : null}
       </View>
