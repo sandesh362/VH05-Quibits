@@ -28,6 +28,7 @@ import { isDuplicateKeyError, liveFilter } from '../../common/repository.js';
 import * as audit from '../audit/audit.service.js';
 import type { JobType } from '@itp/shared';
 import { processManual, type RagProcessResult } from './rag-client.service.js';
+import { enqueue } from './manual-processing-queue.js';
 
 export type Actor = { id: ObjectId; username: string; role: string };
 
@@ -373,6 +374,17 @@ export async function reprocessManual(
     requestId: requestId ?? null,
     metadata: { jobId: jobId.toHexString() },
   });
+
+  enqueue(`manual:${manualId.toHexString()}`, () =>
+    runManualPipeline(db, {
+      jobId,
+      manualId,
+      storagePath: manual.storage_path,
+      machineModelId: manual.machine_model_id ?? null,
+      machineId: manual.machine_id ?? null,
+      actor,
+    }),
+  );
 
   return { jobId };
 }
