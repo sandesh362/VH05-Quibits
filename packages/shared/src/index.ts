@@ -252,6 +252,22 @@ export const PHASE_4_FEATURES: SystemFeatureFlags = {
   maintenanceHistory: true,
 };
 
+/**
+ * Phase 5: conversational troubleshooting on top of Phase 4 RAG.
+ * Incident-memory retrieval and maintenance intelligence stay false.
+ */
+export const PHASE_5_FEATURES: SystemFeatureFlags = {
+  authentication: true,
+  manualUpload: true,
+  documentProcessing: true,
+  ocr: true,
+  embeddings: true,
+  vectorSearch: true,
+  ragAnswers: true,
+  incidentMemory: false,
+  maintenanceHistory: true,
+};
+
 // ---------------------------------------------------------------------------
 // Roles and authorization (Phase 2)
 // ---------------------------------------------------------------------------
@@ -369,11 +385,64 @@ export const MAINTENANCE_TYPES = [
 ] as const;
 export type MaintenanceType = (typeof MAINTENANCE_TYPES)[number];
 
-export const CONVERSATION_STATUSES = ['active', 'archived'] as const;
+export const CONVERSATION_STATUSES = ['active', 'closed', 'archived'] as const;
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
+
+export const ISSUE_STATUSES = [
+  'unknown',
+  'investigating',
+  'temporary_fix',
+  'resolved',
+  'unresolved',
+  'recurring',
+  'escalated',
+] as const;
+export type IssueStatus = (typeof ISSUE_STATUSES)[number];
+
+/** Statuses that require an explicit technician confirmation note. */
+export const CONFIRMED_ISSUE_STATUSES = [
+  'temporary_fix',
+  'resolved',
+  'unresolved',
+  'recurring',
+  'escalated',
+] as const;
 
 export const MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
 export type MessageRole = (typeof MESSAGE_ROLES)[number];
+
+export const MESSAGE_TYPES = [
+  'question',
+  'answer',
+  'clarification',
+  'refusal',
+  'technician_note',
+  'action_record',
+  'system_notice',
+] as const;
+export type MessageType = (typeof MESSAGE_TYPES)[number];
+
+export const MESSAGE_STATUSES = ['pending', 'completed', 'failed'] as const;
+export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
+
+export const SUGGESTED_ACTION_STATUSES = [
+  'suggested',
+  'accepted',
+  'attempted',
+  'completed',
+  'failed',
+  'dismissed',
+] as const;
+export type SuggestedActionStatus = (typeof SUGGESTED_ACTION_STATUSES)[number];
+
+export const TECHNICIAN_ACTION_STATUSES = [
+  'planned',
+  'attempted',
+  'completed',
+  'failed',
+  'not_applicable',
+] as const;
+export type TechnicianActionStatus = (typeof TECHNICIAN_ACTION_STATUSES)[number];
 
 // ---------------------------------------------------------------------------
 // Pagination (Phase 2)
@@ -509,6 +578,89 @@ export interface RagSourceView {
   pageEnd: number;
   sectionTitle: string | null;
   machineModelId: string | null;
+  /** Short excerpt of the retrieved chunk. Never a filesystem path. */
+  excerpt?: string | null;
+}
+
+export interface SuggestedActionView {
+  id: string;
+  description: string;
+  sourceIds: string[];
+  status: SuggestedActionStatus;
+}
+
+export interface ConversationContextView {
+  machineId: string | null;
+  machineModelId: string | null;
+  manualId: string | null;
+  manualVersion: string | null;
+  issueSummary: string | null;
+  errorCodes: string[];
+  symptoms: string[];
+  operatingConditions: string[];
+  attemptedActions: string[];
+  confirmedFindings: string[];
+}
+
+export interface ConversationView {
+  id: string;
+  title: string | null;
+  createdBy: string;
+  machineId: string | null;
+  machineModelId: string | null;
+  manualId: string | null;
+  manualVersion: string | null;
+  machineLabel: string | null;
+  machineModelLabel: string | null;
+  manualTitle: string | null;
+  status: ConversationStatus;
+  issueStatus: IssueStatus;
+  issueSummary: string | null;
+  errorCodes: string[];
+  symptoms: string[];
+  lastMessageAt: string | null;
+  messageCount: number;
+  startedAt: string;
+  closedAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MessageView {
+  id: string;
+  conversationId: string;
+  role: MessageRole;
+  messageType: MessageType;
+  content: string;
+  originalQuery: string | null;
+  normalizedQuery: string | null;
+  status: MessageStatus;
+  sources: RagSourceView[];
+  retrievalMetadata: Record<string, unknown> | null;
+  machineContext: Record<string, unknown> | null;
+  suggestedActions: SuggestedActionView[];
+  clarification: string | null;
+  refusalReason: string | null;
+  ragStatus: RagStatus | null;
+  confidence: RagConfidence | null;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TechnicianActionView {
+  id: string;
+  conversationId: string;
+  createdBy: string;
+  action: string;
+  result: string | null;
+  status: TechnicianActionStatus;
+  performedAt: string;
+  notes: string | null;
+  sourceMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface RagAnswerView {

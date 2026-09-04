@@ -96,11 +96,11 @@ describe('GET /api/v1/system/info', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.service).toBe('backend');
-    expect(res.body.data.phase).toContain('Phase 4');
+    expect(res.body.data.phase).toContain('Phase 5');
     expect(res.body.data.apiPrefix).toBe(PREFIX);
   });
 
-  it('reports Phase 4 capability flags accurately', async () => {
+  it('reports Phase 5 capability flags accurately', async () => {
     const res = await request(app).get(`${PREFIX}/system/info`);
     const features = res.body.data.features;
 
@@ -113,8 +113,8 @@ describe('GET /api/v1/system/info', () => {
     expect(features.ragAnswers).toBe(true);
 
     /**
-     * Incident memory and conversational RAG remain Phase 5+. A premature
-     * `true` would claim a capability the backend does not have.
+     * Incident-memory retrieval is still Phase 6+. A premature `true` would
+     * claim a capability the backend does not have.
      */
     expect(features.incidentMemory).toBe(false);
   });

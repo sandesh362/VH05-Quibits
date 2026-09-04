@@ -74,6 +74,7 @@ class PipelineRequest:
     manufacturer: str | None = None
     include_inactive: bool = False
     conversation_id: str | None = None
+    conversation_context: dict[str, Any] | None = None
     debug: bool = False
     top_k: int | None = None
 
@@ -515,6 +516,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
         evidence_block=evidence_block,
         allowed_source_ids=[s.source_id for s in source_refs],
         conflict_notes=decision.conflicts,
+        conversation_context=req.conversation_context,
     )
     prompt_meta = {
         "prompt_version": deps_prompt_version(),
@@ -686,6 +688,18 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
 
     cited = sources_for_ids(cleaned_payload.get("cited_source_ids") or [], source_refs)
     labels = [s.citation_label() for s in cited]
+    suggested_actions: list[dict[str, Any]] = []
+    checks = [str(c).strip() for c in (cleaned_payload.get("recommended_checks") or []) if str(c).strip()]
+    cited_ids = [s.source_id for s in cited]
+    for index, check in enumerate(checks, start=1):
+        suggested_actions.append(
+            {
+                "id": f"suggestion-{index}",
+                "description": check,
+                "source_ids": cited_ids,
+                "status": "suggested",
+            }
+        )
     # Rebuild the Sources section from validated metadata only.
     body = cleaned_text
     if "\nSources\n" in body:
@@ -715,6 +729,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
         warnings=warnings,
         reason=decision.reason if status == "conflicting_evidence" else None,
         message=decision.message if status == "conflicting_evidence" else None,
+        suggested_actions=suggested_actions,
         debug=_debug_payload(
             req,
             trace,

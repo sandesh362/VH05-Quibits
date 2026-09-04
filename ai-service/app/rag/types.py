@@ -205,6 +205,7 @@ class SourceRef:
     page_end: int
     section_title: str | None
     machine_model_id: str | None = None
+    excerpt: str | None = None
 
     def citation_label(self) -> str:
         version = f", version {self.manual_version}" if self.manual_version else ""
@@ -216,7 +217,7 @@ class SourceRef:
         return f"[{self.manual_title}{version}, {pages}{section}]"
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload = {
             "source_id": self.source_id,
             "chunk_id": self.chunk_id,
             "manual_id": self.manual_id,
@@ -227,6 +228,9 @@ class SourceRef:
             "section_title": self.section_title,
             "machine_model_id": self.machine_model_id,
         }
+        if self.excerpt:
+            payload["excerpt"] = self.excerpt
+        return payload
 
 
 @dataclass
@@ -264,6 +268,7 @@ class RagAnswer:
     reason: str | None = None
     message: str | None = None
     debug: dict[str, Any] | None = None
+    suggested_actions: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -276,6 +281,7 @@ class RagAnswer:
             "sources": self.sources,
             "retrieval": self.retrieval,
             "warnings": self.warnings,
+            "suggested_actions": self.suggested_actions,
         }
         if self.reason:
             payload["reason"] = self.reason

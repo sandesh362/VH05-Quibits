@@ -7,10 +7,11 @@ It combines **machine manuals**, **machine context**, **past incidents**, and **
 history** into a retrieval-augmented answer that always says *where every claim came from* —
 and refuses to answer when it cannot.
 
-> **Status: Phase 4 — Retrieval Engine and RAG Pipeline complete, pending review.**
-> Manuals can be uploaded, indexed, searched (exact + semantic) and answered from
-> retrieved evidence only, with application-authored citations and structured refusals.
-> Incident memory, multi-turn chat, and maintenance intelligence are **not** implemented.
+> **Status: Phase 5 — Conversational Troubleshooting complete, pending review.**
+> Technicians can sign in, open a conversation scoped to a machine or model, ask
+> follow-up questions, and see evidence-grounded answers with citations.
+> AI suggestions are not technician actions; issue status is never auto-resolved.
+> Incident-memory retrieval and maintenance intelligence are **not** implemented.
 > `/system/info` is the source of truth for capability flags.
 
 ---
@@ -129,7 +130,8 @@ Full instructions, including Ollama setup and OS-specific notes:
 | Manual upload / PDF processing / OCR | ✅ Phase 3 |
 | Embeddings, Qdrant, vector search | ✅ Phase 4 |
 | Evidence-grounded RAG answers | ✅ Phase 4 |
-| Incident memory, multi-turn chat | ❌ Phase 5 |
+| Conversational troubleshooting | ✅ Phase 5 |
+| Incident memory retrieval | ❌ Phase 6+ |
 
 The **Service status** page shows the true state of every dependency, including
 failures — nothing is hardcoded to "healthy".
@@ -258,7 +260,13 @@ flagged `must_change_password`.
 | [`docs/PHASE_4_IMPLEMENTATION.md`](docs/PHASE_4_IMPLEMENTATION.md) | What was built, contracts, refusals, tests |
 | [`docs/RETRIEVAL_ENGINE.md`](docs/RETRIEVAL_ENGINE.md) | Normalisation, isolation, ranking, evidence gates |
 
+## Phase 5 documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/PHASE_5_IMPLEMENTATION.md`](docs/PHASE_5_IMPLEMENTATION.md) | Conversation workflow, authz, actions, tests |
+| [`docs/API_CONTRACTS.md`](docs/API_CONTRACTS.md) | `POST /conversations/:id/messages` (no `/troubleshooting/query`) |
+
 ## Next step
 
-Phase 4 is complete and awaiting review. **Phase 5 (conversation memory / incident
-retrieval) will not start without explicit approval.**
+Phase 5 is complete and awaiting review. **Phase 6 will not start without explicit approval.**

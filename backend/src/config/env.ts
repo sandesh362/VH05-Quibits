@@ -110,6 +110,14 @@ const envSchema = z
     RAG_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1000).default(30),
     RAG_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().min(1).max(120).default(1),
 
+    // Conversational troubleshooting (Phase 5)
+    CONVERSATION_HISTORY_MESSAGE_LIMIT: z.coerce.number().int().min(1).max(50).default(10),
+    CONVERSATION_CONTEXT_CHARACTER_LIMIT: z.coerce.number().int().min(500).max(50_000).default(6000),
+    MAX_CONVERSATION_MESSAGE_LENGTH: z.coerce.number().int().min(100).max(20_000).default(5000),
+    MAX_CONVERSATION_TITLE_LENGTH: z.coerce.number().int().min(20).max(500).default(200),
+    MAX_ISSUE_SUMMARY_LENGTH: z.coerce.number().int().min(100).max(10_000).default(2000),
+    CONVERSATION_DUPLICATE_WINDOW_SECONDS: z.coerce.number().int().min(1).max(300).default(15),
+
     // Storage
     STORAGE_ROOT: z.string().default('./storage'),
     /** Max accepted manual PDF size, in megabytes. */
@@ -253,6 +261,14 @@ export interface AppConfig {
     readonly rateLimitMax: number;
     readonly rateLimitWindowMinutes: number;
   };
+  readonly conversation: {
+    readonly historyMessageLimit: number;
+    readonly contextCharacterLimit: number;
+    readonly maxMessageLength: number;
+    readonly maxTitleLength: number;
+    readonly maxIssueSummaryLength: number;
+    readonly duplicateWindowSeconds: number;
+  };
   readonly storageRoot: string;
   readonly manualMaxFileSizeMb: number;
   readonly manualStoragePath: string;
@@ -350,6 +366,14 @@ export function parseConfig(source: NodeJS.ProcessEnv = process.env): AppConfig 
       logQueryText: env.RAG_LOG_QUERY_TEXT,
       rateLimitMax: env.RAG_RATE_LIMIT_MAX,
       rateLimitWindowMinutes: env.RAG_RATE_LIMIT_WINDOW_MINUTES,
+    },
+    conversation: {
+      historyMessageLimit: env.CONVERSATION_HISTORY_MESSAGE_LIMIT,
+      contextCharacterLimit: env.CONVERSATION_CONTEXT_CHARACTER_LIMIT,
+      maxMessageLength: env.MAX_CONVERSATION_MESSAGE_LENGTH,
+      maxTitleLength: env.MAX_CONVERSATION_TITLE_LENGTH,
+      maxIssueSummaryLength: env.MAX_ISSUE_SUMMARY_LENGTH,
+      duplicateWindowSeconds: env.CONVERSATION_DUPLICATE_WINDOW_SECONDS,
     },
     /**
      * Resolve a relative STORAGE_ROOT against the REPO ROOT, not the process

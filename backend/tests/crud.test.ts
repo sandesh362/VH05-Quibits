@@ -598,7 +598,7 @@ describe('conversations', () => {
     expect(res.body.data.conversation.turnCount).toBe(0);
   });
 
-  it('returns an honest 501 for sending a message instead of faking a reply', async () => {
+  it('persists the user message when RAG is unavailable rather than inventing an answer', async () => {
     const created = await request(app)
       .post(`${PREFIX}/conversations`)
       .set(...auth(users.technician))
@@ -609,9 +609,15 @@ describe('conversations', () => {
       .set(...auth(users.technician))
       .send({ content: 'Why is the spindle overheating?' });
 
-    expect(res.status).toBe(501);
-    expect(res.body.error.code).toBe('NOT_IMPLEMENTED');
-    expect(res.body.error.message).toMatch(/Phase 5/);
+    expect(res.status).toBe(503);
+    expect(['DEPENDENCY_UNAVAILABLE', 'SERVICE_UNAVAILABLE']).toContain(res.body.error.code);
+
+    const stored = await request(app)
+      .get(`${PREFIX}/conversations/${created.body.data.conversation.id}/messages`)
+      .set(...auth(users.technician));
+    expect(stored.status).toBe(200);
+    expect(stored.body.data.some((m: { role: string }) => m.role === 'user')).toBe(true);
+    expect(stored.body.data.some((m: { content: string }) => /spindle overheating/i.test(m.content))).toBe(true);
   });
 
   it('returns an empty message list rather than invented content', async () => {

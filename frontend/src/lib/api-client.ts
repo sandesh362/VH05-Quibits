@@ -2,10 +2,7 @@
  * Centralised API client.
  *
  * Every network call in the app goes through here. Rules:
- *  - Only relative URLs. The browser is not necessarily on the same host as
- *    the containers, so it must never address a service directly. The Vite dev
- *    proxy (and nginx in Docker) forwards /api to Express.
- *  - Never talks to FastAPI, Qdrant, MongoDB or Ollama.
+ *  - Only relative URLs. The browser never addresses FastAPI, Qdrant, Mongo or Ollama.
  *  - Always unwraps the shared envelope and normalises failures into ApiClientError.
  */
 import {
@@ -13,16 +10,16 @@ import {
   type ApiErrorCode,
   type ApiResponse,
   type HealthResponse,
+  type PaginationMeta,
+  type PublicUser,
   type ReadinessResponse,
   type SystemInfoResponse,
 } from '@itp/shared';
 
-/** Relative by default so the request stays same-origin. */
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
-
 const DEFAULT_TIMEOUT_MS = 15_000;
+const RAG_TIMEOUT_MS = 130_000;
 
-/** Normalised client-side error. `code` is stable; `message` is for humans. */
 export class ApiClientError extends Error {
   constructor(
     public readonly code: ApiErrorCode | 'NETWORK_ERROR' | 'TIMEOUT' | 'MALFORMED_RESPONSE',
@@ -34,7 +31,6 @@ export class ApiClientError extends Error {
     this.name = 'ApiClientError';
   }
 
-  /** True when retrying could plausibly succeed. */
   get isRetryable(): boolean {
     return (
       this.code === 'NETWORK_ERROR' ||
@@ -46,53 +42,64 @@ export class ApiClientError extends Error {
   }
 }
 
+type TokenGetter = () => string | null;
+let tokenGetter: TokenGetter = () => null;
+
+export function setAuthTokenGetter(getter: TokenGetter): void {
+  tokenGetter = getter;
+}
+
 interface RequestOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
 }
 
-/**
- * Perform a request and unwrap the envelope.
- *
- * A non-2xx status is NOT automatically an error: /ready returns 503 with a
- * perfectly valid readiness body. Errors are decided by the envelope's
- * `success` flag, not the status code.
- */
+interface EnvelopeMeta {
+  requestId: string;
+  timestamp: string;
+  pagination?: PaginationMeta;
+}
+
 async function request<T>(
   path: string,
-  { signal, timeoutMs = DEFAULT_TIMEOUT_MS }: RequestOptions = {},
-): Promise<T> {
+  { signal, timeoutMs = DEFAULT_TIMEOUT_MS, method = 'GET', body, headers }: RequestOptions = {},
+): Promise<{ data: T; meta?: EnvelopeMeta; status: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-  // Honour an externally supplied signal (e.g. component unmount).
   const onAbort = () => controller.abort();
   signal?.addEventListener('abort', onAbort);
 
+  const token = tokenGetter();
   let response: Response;
   try {
     response = await fetch(`${BASE_URL}${path}`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
+      method,
+      headers: {
+        Accept: 'application/json',
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
       credentials: 'same-origin',
     });
-  } catch (error) {
+  } catch {
     if (controller.signal.aborted && !signal?.aborted) {
       throw new ApiClientError('TIMEOUT', `Request timed out after ${timeoutMs / 1000}s.`);
     }
-    throw new ApiClientError(
-      'NETWORK_ERROR',
-      'Cannot reach the API. Is the backend running?',
-    );
+    throw new ApiClientError('NETWORK_ERROR', 'Cannot reach the API. Is the backend running?');
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
   }
 
-  let body: ApiResponse<T>;
+  let parsed: ApiResponse<T> & { meta?: EnvelopeMeta };
   try {
-    body = (await response.json()) as ApiResponse<T>;
+    parsed = (await response.json()) as ApiResponse<T> & { meta?: EnvelopeMeta };
   } catch {
     throw new ApiClientError(
       'MALFORMED_RESPONSE',
@@ -101,16 +108,16 @@ async function request<T>(
     );
   }
 
-  if (isApiFailure(body)) {
+  if (isApiFailure(parsed)) {
     throw new ApiClientError(
-      body.error.code,
-      body.error.message,
+      parsed.error.code,
+      parsed.error.message,
       response.status,
-      body.error.requestId,
+      parsed.error.requestId,
     );
   }
 
-  if (body?.success !== true || body.data === undefined) {
+  if (parsed?.success !== true || parsed.data === undefined) {
     throw new ApiClientError(
       'MALFORMED_RESPONSE',
       'The API response did not match the expected format.',
@@ -118,24 +125,164 @@ async function request<T>(
     );
   }
 
-  return body.data;
+  return { data: parsed.data, meta: parsed.meta, status: response.status };
+}
+
+async function dataOf<T>(path: string, options?: RequestOptions): Promise<T> {
+  const result = await request<T>(path, options);
+  return result.data;
+}
+
+export interface ConversationSummary {
+  id: string;
+  title: string | null;
+  createdBy: string;
+  machineId: string | null;
+  machineModelId: string | null;
+  manualId: string | null;
+  manualVersion: string | null;
+  machineLabel: string | null;
+  machineModelLabel: string | null;
+  manualTitle: string | null;
+  status: string;
+  issueStatus: string;
+  issueSummary: string | null;
+  errorCodes: string[];
+  symptoms: string[];
+  lastMessageAt: string | null;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MessageRecord {
+  id: string;
+  conversationId: string;
+  role: string;
+  messageType: string;
+  content: string;
+  status: string;
+  sources: Array<{
+    sourceId: string;
+    chunkId: string;
+    manualId: string;
+    manualTitle: string;
+    manualVersion: string | null;
+    pageStart: number;
+    pageEnd: number;
+    sectionTitle: string | null;
+    excerpt: string | null;
+  }>;
+  suggestedActions: Array<{ id: string; description: string; sourceIds: string[]; status: string }>;
+  clarification: string | null;
+  refusalReason: string | null;
+  ragStatus: string | null;
+  confidence: string | null;
+  createdAt: string;
+}
+
+export interface TechnicianActionRecord {
+  id: string;
+  conversationId: string;
+  createdBy: string;
+  action: string;
+  result: string | null;
+  status: string;
+  performedAt: string;
+  notes: string | null;
+  sourceMessageId: string | null;
+  createdAt: string;
+}
+
+export interface MachineRecord {
+  id: string;
+  assetTag: string;
+  displayName: string | null;
+  machineModelId: string;
+  modelSnapshot: { manufacturer: string; modelName: string; machineType: string } | null;
+}
+
+export interface MachineModelRecord {
+  id: string;
+  manufacturer: string;
+  modelName: string;
+  machineType: string;
+}
+
+export interface ManualRecord {
+  id: string;
+  title: string;
+  documentVersion: string | null;
+  machineModelId: string | null;
+  machineId: string | null;
 }
 
 export const apiClient = {
-  /** Process liveness. Fast; does not probe dependencies. */
-  getHealth: (options?: RequestOptions) => request<HealthResponse>('/health', options),
-
-  /**
-   * Dependency readiness. Returns HTTP 503 when a required dependency is down,
-   * but the body is still a valid readiness report - so this resolves rather
-   * than throwing, and the UI renders the real state.
-   */
+  getHealth: (options?: RequestOptions) => dataOf<HealthResponse>('/health', options),
   getReadiness: (options?: RequestOptions) =>
-    request<ReadinessResponse>('/ready', { timeoutMs: 20_000, ...options }),
+    dataOf<ReadinessResponse>('/ready', { timeoutMs: 20_000, ...options }),
+  getSystemInfo: (options?: RequestOptions) => dataOf<SystemInfoResponse>('/system/info', options),
 
-  /** Build and configuration facts. */
-  getSystemInfo: (options?: RequestOptions) =>
-    request<SystemInfoResponse>('/system/info', options),
+  login: (email: string, password: string) =>
+    dataOf<{ accessToken: string; refreshToken: string; expiresIn: number; user: PublicUser }>(
+      '/auth/login',
+      { method: 'POST', body: { email, password } },
+    ),
+  me: () => dataOf<{ user: PublicUser }>('/auth/me'),
+  logout: (refreshToken?: string) =>
+    dataOf<{ loggedOut: boolean }>('/auth/logout', { method: 'POST', body: { refreshToken } }),
+
+  listMachines: () => request<MachineRecord[]>('/machines?limit=100'),
+  listModels: () => request<MachineModelRecord[]>('/machine-models?limit=100'),
+  listManuals: (machineModelId?: string) =>
+    request<ManualRecord[]>(
+      `/manuals?limit=100${machineModelId ? `&machineModelId=${machineModelId}` : ''}`,
+    ),
+
+  listConversations: (query = '') =>
+    request<ConversationSummary[]>(`/conversations${query ? `?${query}` : ''}`),
+  getConversation: (id: string) => dataOf<{ conversation: ConversationSummary }>(`/conversations/${id}`),
+  createConversation: (body: Record<string, unknown>) =>
+    dataOf<{ conversation: ConversationSummary }>('/conversations', { method: 'POST', body }),
+  listMessages: (id: string) => request<MessageRecord[]>(`/conversations/${id}/messages?limit=100`),
+  sendMessage: (id: string, content: string, clientRequestId: string) =>
+    dataOf<{
+      message: MessageRecord;
+      userMessage: MessageRecord;
+      rag: {
+        status: string;
+        confidence: string | null;
+        evidenceSufficient: boolean;
+        sources: MessageRecord['sources'];
+        warnings: string[];
+        clarification: string | null;
+        refusalReason: string | null;
+      };
+      conversation: { id: string; issueStatus: string; status: string; messageCount: number };
+    }>(`/conversations/${id}/messages`, {
+      method: 'POST',
+      body: { content, clientRequestId },
+      timeoutMs: RAG_TIMEOUT_MS,
+      headers: { 'Idempotency-Key': clientRequestId },
+    }),
+  listActions: (id: string) => request<TechnicianActionRecord[]>(`/conversations/${id}/actions?limit=100`),
+  recordAction: (id: string, body: Record<string, unknown>) =>
+    dataOf<{ action: TechnicianActionRecord }>(`/conversations/${id}/actions`, { method: 'POST', body }),
+  updateIssueStatus: (id: string, body: Record<string, unknown>) =>
+    dataOf<{ conversation: ConversationSummary }>(`/conversations/${id}/issue-status`, {
+      method: 'PATCH',
+      body,
+    }),
+  closeConversation: (id: string, confirmationNote?: string) =>
+    dataOf<{ conversation: ConversationSummary }>(`/conversations/${id}/close`, {
+      method: 'POST',
+      body: confirmationNote ? { confirmationNote } : {},
+    }),
+  reopenConversation: (id: string, note?: string) =>
+    dataOf<{ conversation: ConversationSummary }>(`/conversations/${id}/reopen`, {
+      method: 'POST',
+      body: note ? { note } : {},
+    }),
 };
 
 export { BASE_URL as apiBaseUrl };

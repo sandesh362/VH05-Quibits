@@ -15,6 +15,9 @@ def sources_from_hits(hits: list[RetrievalHit]) -> list[SourceRef]:
     for hit in hits:
         source_id = hit.source_id or f"source-{len(refs) + 1}"
         hit.source_id = source_id
+        excerpt = (hit.text or "").strip().replace("\n", " ")
+        if len(excerpt) > 400:
+            excerpt = excerpt[:399].rsplit(" ", 1)[0] + "…"
         refs.append(
             SourceRef(
                 source_id=source_id,
@@ -26,6 +29,7 @@ def sources_from_hits(hits: list[RetrievalHit]) -> list[SourceRef]:
                 page_end=hit.page_end,
                 section_title=hit.section_title,
                 machine_model_id=hit.machine_model_id,
+                excerpt=excerpt or None,
             )
         )
     return refs
