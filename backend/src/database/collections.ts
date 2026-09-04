@@ -157,17 +157,22 @@ export interface MachineDoc extends BaseDoc, SoftDeletable, Attributed {
 export interface ManualDoc extends BaseDoc, SoftDeletable {
   _id: ObjectId;
   title: string;
+  description?: string | null;
+  /** Display-only. May differ from the model's manufacturer (e.g. OEM vs brand). */
+  manufacturer?: string | null;
   scope: ManualScope;
   machine_model_id?: ObjectId | null;
   machine_id?: ObjectId | null;
   document_type: DocumentType;
+  document_number?: string | null;
   document_version?: string | null;
+  revision?: string | null;
   supersedes_manual_id?: ObjectId | null;
   is_current_version: boolean;
   language: string;
   /** Metadata only. Never used to build a filesystem path. */
   original_filename: string;
-  /** Server-generated, relative to STORAGE_ROOT. Never returned to clients. */
+  /** Server-generated, relative to MANUAL_STORAGE_PATH. Never returned to clients. */
   storage_path: string;
   file_size_bytes: number;
   sha256: string;
@@ -175,8 +180,18 @@ export interface ManualDoc extends BaseDoc, SoftDeletable {
   page_count?: number | null;
   /** Owned by the Phase 3 pipeline. Always `queued` when created here. */
   processing_status: ProcessingStatus;
+  /** Pipeline/format version the manual was last processed with (reproduce/trace). */
+  processing_version?: string | null;
+  /** How text was obtained: `native` (text layer) | `ocr` | `mixed`. */
+  extraction_method?: string | null;
+  ocr_used?: boolean | null;
   indexed_chunk_count: number;
   indexed_at?: Date | null;
+  processed_at?: Date | null;
+  failed_at?: Date | null;
+  failure_reason?: string | null;
+  /** Distinguishes an active manual from one retired by metadata, not soft-delete. */
+  is_active: boolean;
   uploaded_by: ObjectId;
 }
 
@@ -202,12 +217,73 @@ export interface ManualProcessingJobDoc extends BaseDoc {
   stages: JobStage[];
   progress_percent: number;
   attempt: number;
+  /** User that requested the job (null for system/scheduled). */
+  triggered_by?: ObjectId | null;
+  machine_model_id?: ObjectId | null;
   /** Stable code for clients. The raw message stays internal. */
   error_code?: string | null;
   error_message?: string | null;
+  error_details?: string | null;
   started_at?: Date | null;
   completed_at?: Date | null;
+  failed_at?: Date | null;
+  retry_count: number;
+  total_pages?: number | null;
+  processed_pages: number;
+  total_chunks?: number | null;
+  processed_chunks: number;
+  extraction_method?: string | null;
+  ocr_used?: boolean | null;
+  embedding_model?: string | null;
+  embedding_dimension?: number | null;
   created_by?: ObjectId | null;
+}
+
+// ---------------------------------------------------------------------------
+// manual_pages  (page-level extracted text; source of truth for citations)
+// ---------------------------------------------------------------------------
+
+export interface ManualPageDoc extends BaseDoc {
+  _id: ObjectId;
+  manual_id: ObjectId;
+  /** Actual PDF page number, 1-based. Never derived from a running counter. */
+  page_number: number;
+  /** Raw text exactly as the extractor/OCR produced it. Never mutated. */
+  raw_text: string;
+  cleaned_text: string;
+  character_count: number;
+  word_count: number;
+  has_text: boolean;
+  extraction_method: string;
+  ocr_used: boolean;
+  ocr_confidence?: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// manual_chunks  (retrieval unit; Mongo is authoritative, Qdrant is the index)
+// ---------------------------------------------------------------------------
+
+export type ChunkIndexingStatus = 'pending' | 'embedded' | 'indexed';
+
+export interface ManualChunkDoc extends BaseDoc {
+  _id: ObjectId;
+  manual_id: ObjectId;
+  machine_model_id?: ObjectId | null;
+  machine_id?: ObjectId | null;
+  chunk_index: number;
+  page_start: number;
+  page_end: number;
+  section_title?: string | null;
+  section_path?: string[] | null;
+  text: string;
+  normalized_text: string;
+  character_count: number;
+  word_count: number;
+  content_hash: string;
+  embedding_model?: string | null;
+  embedding_dimension?: number | null;
+  qdrant_point_id?: string | null;
+  indexing_status: ChunkIndexingStatus;
 }
 
 // ---------------------------------------------------------------------------
@@ -407,6 +483,8 @@ export const COLLECTIONS = {
   machines: 'machines',
   manuals: 'manuals',
   manualProcessingJobs: 'manual_processing_jobs',
+  manualPages: 'manual_pages',
+  manualChunks: 'manual_chunks',
   conversations: 'conversations',
   messages: 'messages',
   incidents: 'incidents',
@@ -423,6 +501,10 @@ export const collections = {
   manuals: (db: Db): Collection<ManualDoc> => db.collection<ManualDoc>(COLLECTIONS.manuals),
   manualProcessingJobs: (db: Db): Collection<ManualProcessingJobDoc> =>
     db.collection<ManualProcessingJobDoc>(COLLECTIONS.manualProcessingJobs),
+  manualPages: (db: Db): Collection<ManualPageDoc> =>
+    db.collection<ManualPageDoc>(COLLECTIONS.manualPages),
+  manualChunks: (db: Db): Collection<ManualChunkDoc> =>
+    db.collection<ManualChunkDoc>(COLLECTIONS.manualChunks),
   conversations: (db: Db): Collection<ConversationDoc> =>
     db.collection<ConversationDoc>(COLLECTIONS.conversations),
   messages: (db: Db): Collection<MessageDoc> => db.collection<MessageDoc>(COLLECTIONS.messages),

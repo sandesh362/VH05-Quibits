@@ -96,36 +96,30 @@ describe('GET /api/v1/system/info', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.service).toBe('backend');
-    expect(res.body.data.phase).toContain('Phase 2');
+    expect(res.body.data.phase).toContain('Phase 3');
     expect(res.body.data.apiPrefix).toBe(PREFIX);
   });
 
-  it('reports authentication as available and every AI feature as unimplemented', async () => {
+  it('reports Phase 3 capability flags accurately', async () => {
     const res = await request(app).get(`${PREFIX}/system/info`);
     const features = res.body.data.features;
 
-    // Phase 2 delivers exactly one of these: authentication.
+    // Phase 3 delivers the ingestion pipeline.
     expect(features.authentication).toBe(true);
+    expect(features.manualUpload).toBe(true);
+    expect(features.documentProcessing).toBe(true);
+    expect(features.ocr).toBe(true);
+    expect(features.embeddings).toBe(true);
 
     /**
-     * Everything document- or AI-related must still report false. This is the
-     * guard that stops a future phase from flipping a flag before the
-     * capability behind it actually exists - the UI reads these flags to decide
-     * what to offer, so a premature `true` becomes a user-visible lie.
+     * Retrieval/RAG are Phase 4/5 and must still report false - the UI reads
+     * these flags to decide what to offer, so a premature `true` would claim a
+     * capability the backend does not have.
      */
-    const mustRemainFalse = [
-      'manualUpload',
-      'documentProcessing',
-      'ocr',
-      'embeddings',
-      'vectorSearch',
-      'ragAnswers',
-      'incidentMemory',
-      'maintenanceHistory',
-    ];
+    const mustRemainFalse = ['vectorSearch', 'ragAnswers', 'incidentMemory'];
 
     for (const name of mustRemainFalse) {
-      expect(features[name], `feature "${name}" must be false in Phase 2`).toBe(false);
+      expect(features[name], `feature "${name}" must be false in Phase 3`).toBe(false);
     }
   });
 

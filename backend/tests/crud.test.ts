@@ -212,21 +212,33 @@ describe('machines', () => {
 });
 
 describe('manuals', () => {
-  async function createManual(modelId: string, overrides: Record<string, unknown> = {}) {
-    return request(app)
+  const VALID_PDF = Buffer.from(
+    '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n%%EOF\n',
+  );
+
+  /**
+   * Phase 3 changed POST /manuals into a multipart upload. Filename, checksum,
+   * size and mime are now computed from the file by the server, so the fields
+   * are no longer accepted in the body. Existing stale fields are sent to prove
+   * they are simply ignored (the schema is `.strict()` but only on the body).
+   */
+  async function createManual(
+    modelId: string,
+    overrides: Record<string, unknown> = {},
+    filename = 'vf2-service.pdf',
+  ) {
+    let req = request(app)
       .post(`${PREFIX}/manuals`)
       .set(...auth(users.manager))
-      .send({
-        title: 'VF-2 Service Manual',
-        scope: 'model',
-        machineModelId: modelId,
-        documentType: 'service',
-        originalFilename: 'vf2-service.pdf',
-        fileSizeBytes: 2_048_000,
-        sha256: 'b'.repeat(64),
-        mimeType: 'application/pdf',
-        ...overrides,
-      });
+      .field('title', 'VF-2 Service Manual')
+      .field('scope', 'model')
+      .field('machineModelId', modelId)
+      .field('documentType', 'service')
+      .attach('file', VALID_PDF, filename);
+    for (const [key, value] of Object.entries(overrides)) {
+      req = req.field(key, String(value));
+    }
+    return req;
   }
 
   it('creates metadata with processing queued and not searchable', async () => {
@@ -261,20 +273,35 @@ describe('manuals', () => {
     expect(res.body.error.message).toMatch(/pipeline/i);
   });
 
-  it('rejects a filename containing path traversal', async () => {
+  it('sanitises a traversal-looking upload filename to a single component', async () => {
     const model = await createModel();
-    const res = await createManual(model.body.data.machineModel.id, {
-      originalFilename: '../../etc/passwd',
-    });
+    // The filename is taken from multer's own `originalname` for the uploaded
+    // file, then sanitised server-side. It is never trusted or used for the
+    // on-disk path (which is server-generated).
+    const res = await createManual(
+      model.body.data.machineModel.id,
+      {},
+      '../../etc/passwd',
+    );
 
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(201);
+    // The stored original filename is sanitised to a single component.
+    expect(res.body.data.manual.originalFilename).not.toMatch(/\.\.|\//);
   });
 
-  it('rejects a malformed checksum', async () => {
+  it('rejects a malformed body (no file)', async () => {
     const model = await createModel();
-    const res = await createManual(model.body.data.machineModel.id, { sha256: 'nope' });
-
+    const res = await request(app)
+      .post(`${PREFIX}/manuals`)
+      .set(...auth(users.manager))
+      .send({
+        title: 'VF-2 Service Manual',
+        scope: 'model',
+        machineModelId: model.body.data.machineModel.id,
+        documentType: 'service',
+      });
     expect(res.status).toBe(422);
+    expect(res.body.error.message).toMatch(/file/i);
   });
 
   it('rejects a model-scoped manual that also supplies a machine', async () => {
@@ -282,7 +309,7 @@ describe('manuals', () => {
     const modelId = model.body.data.machineModel.id;
     const machine = await createMachine(modelId);
 
-    const res = await createManual(modelId, { machineId: machine.body.data.machine.id });
+    const res = await createManual(modelId, { machineId: machine.body.data.machine.id, scope: 'model' });
     expect(res.status).toBe(422);
   });
 });

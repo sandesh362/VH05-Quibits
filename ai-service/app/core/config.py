@@ -79,6 +79,29 @@ class Settings(BaseSettings):
     # -- Storage -------------------------------------------------------------
     STORAGE_ROOT: str = Field(default="./storage")
 
+    # -- Manual document processing (Phase 3) ---------------------------------
+    # Whether OCR is automatically applied to text-poor pages.
+    OCR_ENABLED: bool = Field(default=True)
+    OCR_LANGUAGE: str = Field(default="eng")
+    # A page with fewer extractable characters than this is considered text-poor
+    # and routed to OCR (when enabled).
+    OCR_MIN_TEXT_CHARACTERS_PER_PAGE: int = Field(default=50, ge=1, le=100_000)
+
+    # Chunking settings (characters). CHUNK_SIZE is the target; CHUNK_OVERLAP
+    # is the amount shared between consecutive chunks.
+    CHUNK_SIZE: int = Field(default=1200, ge=100, le=100_000)
+    CHUNK_OVERLAP: int = Field(default=200, ge=0, le=50_000)
+    MIN_CHUNK_SIZE: int = Field(default=200, ge=1, le=100_000)
+    MAX_CHUNK_SIZE: int = Field(default=1800, ge=100, le=200_000)
+
+    CHUNKING_VERSION: str = Field(default="cv1")
+
+    # Qdrant collection holding manual chunk vectors.
+    QDRANT_MANUAL_COLLECTION: str = Field(default="manual_chunks")
+
+    # Hard wall-clock cap for a single processing job.
+    MANUAL_PROCESSING_TIMEOUT_MS: int = Field(default=1_800_000, ge=10_000, le=10_800_000)
+
     # -- Health probes -------------------------------------------------------
     HEALTH_CHECK_TIMEOUT_MS: int = Field(default=10_000, ge=100, le=60_000)
 
@@ -191,6 +214,20 @@ class Settings(BaseSettings):
     def storage_root_path(self) -> Path:
         root = Path(self.STORAGE_ROOT)
         return root if root.is_absolute() else (REPO_ROOT / root).resolve()
+
+    @property
+    def manual_storage_root(self) -> Path:
+        """Root directory for manual artifacts: <storage>/manuals."""
+        return self.storage_root_path / "manuals"
+
+    @property
+    def embedding_model(self) -> str:
+        """The Ollama embedding model used for all manual chunk vectors."""
+        return self.OLLAMA_EMBEDDING_MODEL
+
+    @property
+    def manual_timeout_seconds(self) -> float:
+        return self.MANUAL_PROCESSING_TIMEOUT_MS / 1000
 
 
 @lru_cache(maxsize=1)

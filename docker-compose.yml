@@ -115,6 +115,18 @@ services:
       REQUEST_BODY_LIMIT: ${REQUEST_BODY_LIMIT:-1mb}
       HEALTH_CHECK_TIMEOUT_MS: ${HEALTH_CHECK_TIMEOUT_MS:-10000}
       STORAGE_ROOT: /app/storage
+      # Manual processing pipeline configuration.
+      MAX_MANUAL_FILE_SIZE_MB: ${MAX_MANUAL_FILE_SIZE_MB:-100}
+      MANUAL_STORAGE_PATH: ${MANUAL_STORAGE_PATH:-manuals}
+      OCR_ENABLED: ${OCR_ENABLED:-true}
+      OCR_LANGUAGE: ${OCR_LANGUAGE:-eng}
+      OCR_MIN_TEXT_CHARACTERS_PER_PAGE: ${OCR_MIN_TEXT_CHARACTERS_PER_PAGE:-50}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1200}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
+      MIN_CHUNK_SIZE: ${MIN_CHUNK_SIZE:-200}
+      MAX_CHUNK_SIZE: ${MAX_CHUNK_SIZE:-1800}
+      MANUAL_PROCESSING_TIMEOUT_MS: ${MANUAL_PROCESSING_TIMEOUT_MS:-1800000}
+      QDRANT_MANUAL_COLLECTION: ${QDRANT_MANUAL_COLLECTION:-manual_chunks}
     volumes:
       # Shared with the RAG service: Express receives uploads, FastAPI reads them.
       - storage_data:/app/storage
@@ -168,6 +180,17 @@ services:
       MONGO_DB_NAME: ${MONGO_DB_NAME:-itp}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN in .env}
       STORAGE_ROOT: /app/storage
+      # Manual processing pipeline configuration.
+      OCR_ENABLED: ${OCR_ENABLED:-true}
+      OCR_LANGUAGE: ${OCR_LANGUAGE:-eng}
+      OCR_MIN_TEXT_CHARACTERS_PER_PAGE: ${OCR_MIN_TEXT_CHARACTERS_PER_PAGE:-50}
+      CHUNK_SIZE: ${CHUNK_SIZE:-1200}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-200}
+      MIN_CHUNK_SIZE: ${MIN_CHUNK_SIZE:-200}
+      MAX_CHUNK_SIZE: ${MAX_CHUNK_SIZE:-1800}
+      CHUNKING_VERSION: ${CHUNKING_VERSION:-cv1}
+      MANUAL_PROCESSING_TIMEOUT_MS: ${MANUAL_PROCESSING_TIMEOUT_MS:-1800000}
+      QDRANT_MANUAL_COLLECTION: ${QDRANT_MANUAL_COLLECTION:-manual_chunks}
     volumes:
       - storage_data:/app/storage
     # NO ports section. This service is reachable only from inside itp-net.

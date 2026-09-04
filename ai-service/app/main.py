@@ -26,7 +26,9 @@ from app.core.config import ConfigValidationError, get_settings, redact_uri
 from app.core.errors import ServiceError, failure_envelope
 from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, get_request_id
+from app.routers import documents as documents_router
 from app.routers import health as health_router
+from app.routers import indexing as indexing_router
 
 # --------------------------------------------------------------------------- #
 # Configuration is validated at import time so a bad environment fails fast
@@ -58,7 +60,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     log.info(
         "service_starting",
-        phase="Phase 1 - Infrastructure Foundation",
+        phase="Phase 3 - Document Ingestion & Indexing",
         environment=settings.PYTHON_ENV,
         api_prefix=settings.RAG_API_PREFIX,
         qdrant_url=settings.QDRANT_URL,
@@ -196,6 +198,8 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
 # Routes
 # --------------------------------------------------------------------------- #
 app.include_router(health_router.router, prefix=settings.RAG_API_PREFIX)
+app.include_router(documents_router.router, prefix=settings.RAG_API_PREFIX)
+app.include_router(indexing_router.router, prefix=settings.RAG_API_PREFIX)
 
 
 @app.get("/healthz", include_in_schema=False)
