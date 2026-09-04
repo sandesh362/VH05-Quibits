@@ -1,0 +1,150 @@
+/**
+ * Global styles.
+ *
+ * Plain CSS with custom properties - no CSS framework in Phase 1. A design
+ * system arrives in Phase 9 with the real UI.
+ *
+ * Dark-first with high contrast: the eventual users are technicians on a shop
+ * floor, often on a washed-out screen under bright light.
+ */
+
+:root {
+  /* Surfaces */
+  --color-bg: #0f1115;
+  --color-surface: #171a21;
+  --color-surface-raised: #1e222b;
+  --color-border: #2a2f3a;
+  --color-border-strong: #3a4150;
+
+  /* Text */
+  --color-text: #e6e9ef;
+  --color-text-muted: #9aa3b2;
+  --color-text-subtle: #6b7484;
+
+  /* Status - each pairs a colour with an icon/label in the UI, never colour alone */
+  --color-ok: #3fb950;
+  --color-ok-bg: rgba(63, 185, 80, 0.12);
+  --color-warn: #d29922;
+  --color-warn-bg: rgba(210, 153, 34, 0.12);
+  --color-error: #f85149;
+  --color-error-bg: rgba(248, 81, 73, 0.12);
+  --color-info: #58a6ff;
+  --color-info-bg: rgba(88, 166, 255, 0.12);
+  --color-neutral: #6b7484;
+  --color-neutral-bg: rgba(107, 116, 132, 0.12);
+
+  --radius: 8px;
+  --radius-sm: 5px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', Consolas, 'Liberation Mono', monospace;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+  font-weight: 600;
+}
+h1 { font-size: 1.5rem; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1rem; }
+
+p { margin: 0; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--color-surface-raised);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  word-break: break-word;
+}
+
+a {
+  color: var(--color-info);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+/* Visible focus ring - keyboard users and gloved-hand tablet users both benefit */
+:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  /* Comfortable tap target */
+  min-height: 40px;
+  padding: 0 var(--space-md);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+button:hover:not(:disabled) {
+  background: var(--color-border);
+  border-color: var(--color-text-subtle);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Screen-reader-only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
