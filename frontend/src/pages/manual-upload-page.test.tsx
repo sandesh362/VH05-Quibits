@@ -28,6 +28,11 @@ function renderUpload(): void {
     meta: { requestId: 'r', timestamp: '' },
     status: 200,
   } as never);
+  vi.spyOn(apiClient, 'listMachines').mockResolvedValue({
+    data: [{ id: 'machine1', assetTag: 'VF2-001', displayName: 'Haas VF-2 #1' }],
+    meta: { requestId: 'r', timestamp: '' },
+    status: 200,
+  } as never);
   render(
     <MemoryRouter>
       <AuthProvider>
@@ -75,5 +80,27 @@ describe('ManualUploadPage validation', () => {
     // Version and model are required before upload; labels are present.
     expect(screen.getByText(/Version/)).toBeInTheDocument();
     expect(document.getElementById('machineModelId')).toBeInTheDocument();
+  });
+
+  it('submits machineId for a machine-scoped manual', async () => {
+    const uploadManual = vi.spyOn(apiClient, 'uploadManual').mockResolvedValue({
+      data: { manual: { id: 'manual1' } },
+    } as never);
+    renderUpload();
+
+    const input = (await screen.findByTestId('manual-file-input')) as HTMLInputElement;
+    const pdf = new File(['%PDF-1.4'], 'machine-guide.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [pdf] } });
+    fireEvent.change(document.getElementById('scope') as HTMLSelectElement, { target: { value: 'machine' } });
+    fireEvent.change(document.getElementById('machineId') as HTMLSelectElement, { target: { value: 'machine1' } });
+    fireEvent.change(document.getElementById('documentVersion') as HTMLInputElement, { target: { value: '1.0' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /upload & process/i }));
+
+    await waitFor(() => expect(uploadManual).toHaveBeenCalledOnce());
+    const form = uploadManual.mock.calls[0][0];
+    expect(form.get('scope')).toBe('machine');
+    expect(form.get('machineId')).toBe('machine1');
+    expect(form.get('machineModelId')).toBeNull();
   });
 });

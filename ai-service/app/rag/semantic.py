@@ -111,9 +111,9 @@ class QdrantVectorIndex:
             scope, allowed_manual_ids=allowed_manual_ids, embedding_model=embedding_model
         )
         try:
-            points = await self.wrapper.client.search(
+            result = await self.wrapper.client.query_points(
                 collection_name=self.collection,
-                query_vector=vector,
+                query=vector,
                 query_filter=query_filter,
                 limit=limit,
                 with_payload=True,
@@ -127,7 +127,7 @@ class QdrantVectorIndex:
             ) from exc
 
         out: list[tuple[Any, float]] = []
-        for point in points:
+        for point in result.points:
             payload = point.payload or {}
             chunk = chunk_from_qdrant_payload(payload, str(point.id))
             out.append((chunk, float(point.score)))

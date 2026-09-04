@@ -61,6 +61,15 @@ def configure_logging(level: str = "INFO", *, json_output: bool = True) -> None:
     """Configure structlog and route stdlib logging through it."""
     numeric_level = getattr(logging, level.upper(), logging.INFO)
 
+    # Windows PowerShell/cmd may expose stdout as a legacy code page (for
+    # example cp1252). Ollama error bodies and PDF metadata are valid Unicode;
+    # logging either must handle them or it can mask the original processing
+    # failure with a ``charmap codec can't encode`` exception.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
     logging.basicConfig(
         format="%(message)s",
         stream=sys.stdout,

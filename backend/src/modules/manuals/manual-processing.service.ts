@@ -28,6 +28,7 @@ import { isDuplicateKeyError, liveFilter } from '../../common/repository.js';
 import * as audit from '../audit/audit.service.js';
 import type { JobType } from '@itp/shared';
 import { processManual, type RagProcessResult } from './rag-client.service.js';
+import { enqueue } from './manual-processing-queue.js';
 
 export type Actor = { id: ObjectId; username: string; role: string };
 
@@ -401,7 +402,53 @@ export async function reprocessManual(
     metadata: { jobId: jobId.toHexString() },
   });
 
+  // A reprocess is a real processing job, not only a status reset.  Leaving
+  // this out stranded the manual in `queued`, which then made every
+  // conversation for its model report that no indexed manual existed.
+  enqueue(`manual:${manualId.toHexString()}`, () =>
+    runManualPipeline(db, {
+      jobId,
+      manualId,
+      storagePath: manual.storage_path,
+      machineModelId: manual.machine_model_id ?? null,
+      machineId: manual.machine_id ?? null,
+      actor,
+    }),
+  );
+
   return { jobId };
+}
+
+/**
+ * Requeue jobs that were safely persisted but not in the in-memory worker
+ * queue when the API process restarted.  This makes upload/reprocess reliable
+ * across every model and manual instead of requiring an operator to create a
+ * new manual after a restart.
+ */
+export async function resumeQueuedManualProcessing(db: Db): Promise<number> {
+  const queuedJobs = await collections.manualProcessingJobs(db)
+    .find({ status: 'queued' })
+    .sort({ created_at: 1 })
+    .toArray();
+
+  for (const job of queuedJobs) {
+    const manual = await collections.manuals(db).findOne(liveFilter({ _id: job.manual_id }));
+    if (!manual || !manual.storage_path) {
+      continue;
+    }
+    enqueue(`manual:${job.manual_id.toHexString()}`, () =>
+      runManualPipeline(db, {
+        jobId: job._id,
+        manualId: job.manual_id,
+        storagePath: manual.storage_path,
+        machineModelId: manual.machine_model_id ?? null,
+        machineId: manual.machine_id ?? null,
+        actor: null,
+      }),
+    );
+  }
+
+  return queuedJobs.length;
 }
 
 /**

@@ -9,10 +9,11 @@ vector, correct dimension) so the indexing path cannot drift from the query path
 from __future__ import annotations
 
 from typing import Any
+from time import perf_counter
 
 import httpx
 
-from app.core.config import Settings
+from app.core.config import Settings, redact_uri
 from app.core.errors import ServiceError
 from app.core.logging import get_logger
 
@@ -32,6 +33,20 @@ class OllamaEmbeddingClient:
         self.settings = settings
         self.base_url = settings.OLLAMA_BASE_URL
         self.timeout = settings.ollama_timeout_seconds
+
+    def _embedding_context(self, texts: list[str], prefix: str) -> dict[str, Any]:
+        """Return diagnostic metadata without retaining manual or query content."""
+        lengths = [len(text) for text in texts]
+        return {
+            "operation": "embedding",
+            "ollama_url": redact_uri(f"{self.base_url.rstrip('/')}/api/embed"),
+            "embedding_model": self.settings.embedding_model,
+            "timeout_seconds": self.timeout,
+            "input_count": len(texts),
+            "input_characters": sum(lengths),
+            "largest_input_characters": max(lengths, default=0),
+            "prefix": "document" if prefix == DOCUMENT_PREFIX else "query",
+        }
 
     async def ping(self) -> dict[str, Any]:
         """Verify Ollama is reachable and the configured embedding model is present.
@@ -81,51 +96,111 @@ class OllamaEmbeddingClient:
             return []
 
         prefixed = [f"{prefix}{t}" for t in texts]
+        context = self._embedding_context(texts, prefix)
+        started_at = perf_counter()
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     f"{self.base_url}/api/embed",
                     json={"model": self.settings.embedding_model, "input": prefixed},
                 )
+        except httpx.TimeoutException as exc:
+            context.update(
+                exception_type=exc.__class__.__name__,
+                exception_detail=str(exc)[:300],
+                elapsed_ms=round((perf_counter() - started_at) * 1000),
+            )
+            log.exception("ollama_embedding_timeout", **context)
+            raise ServiceError(
+                "SERVICE_UNAVAILABLE",
+                "Ollama embedding request timed out.",
+                internal_context=context,
+            ) from exc
         except Exception as exc:  # noqa: BLE001
+            context.update(
+                exception_type=exc.__class__.__name__,
+                exception_detail=str(exc)[:300],
+                elapsed_ms=round((perf_counter() - started_at) * 1000),
+            )
+            log.exception("ollama_embedding_transport_error", **context)
             raise ServiceError(
                 "SERVICE_UNAVAILABLE",
                 "Ollama embedding request failed.",
-                internal_context={"detail": str(exc)},
+                internal_context=context,
             ) from exc
 
         if response.status_code >= 400:
+            context.update(
+                http_status=response.status_code,
+                response_excerpt=response.text[:500],
+                elapsed_ms=round((perf_counter() - started_at) * 1000),
+            )
+            log.error("ollama_embedding_http_error", **context)
             raise ServiceError(
                 "SERVICE_UNAVAILABLE",
                 f"Ollama embedding failed (HTTP {response.status_code}).",
-                internal_context={"status": response.status_code},
+                internal_context=context,
             )
 
-        payload = response.json()
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            context.update(
+                http_status=response.status_code,
+                response_excerpt=response.text[:500],
+                exception_type=exc.__class__.__name__,
+                exception_detail=str(exc)[:300],
+                elapsed_ms=round((perf_counter() - started_at) * 1000),
+            )
+            log.exception("ollama_embedding_invalid_json", **context)
+            raise ServiceError(
+                "SERVICE_UNAVAILABLE",
+                "Ollama returned an invalid embedding response.",
+                internal_context=context,
+            ) from exc
+
         embeddings = payload.get("embeddings") or payload.get("data")
         if not isinstance(embeddings, list) or len(embeddings) != len(texts):
+            context.update(
+                http_status=response.status_code,
+                returned_embedding_count=len(embeddings) if isinstance(embeddings, list) else None,
+                response_keys=sorted(payload.keys()) if isinstance(payload, dict) else None,
+                elapsed_ms=round((perf_counter() - started_at) * 1000),
+            )
+            log.error("ollama_embedding_unexpected_response", **context)
             raise ServiceError(
                 "INTERNAL_SERVER_ERROR",
                 "Ollama returned an unexpected embedding response.",
-                internal_context={
-                    "count": len(embeddings) if isinstance(embeddings, list) else None
-                },
+                internal_context=context,
             )
 
         vectors: list[list[float]] = []
         for vector in embeddings:
             if not isinstance(vector, list) or len(vector) == 0:
+                context.update(vector_dimension=len(vector) if isinstance(vector, list) else None)
+                log.error("ollama_embedding_empty_vector", **context)
                 raise ServiceError(
                     "INTERNAL_SERVER_ERROR",
                     "Ollama returned an empty embedding vector.",
+                    internal_context=context,
                 )
             if any(not isinstance(v, (int | float)) for v in vector):
+                context.update(vector_dimension=len(vector))
+                log.error("ollama_embedding_malformed_vector", **context)
                 raise ServiceError(
                     "INTERNAL_SERVER_ERROR",
                     "Ollama returned a malformed embedding vector.",
+                    internal_context=context,
                 )
             vectors.append([float(v) for v in vector])
 
+        log.info(
+            "ollama_embedding_completed",
+            **context,
+            http_status=response.status_code,
+            vector_dimension=len(vectors[0]),
+            elapsed_ms=round((perf_counter() - started_at) * 1000),
+        )
         return vectors
 
     async def dimension_probe(self) -> int:

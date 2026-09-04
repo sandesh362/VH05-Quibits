@@ -11,7 +11,7 @@
 import { ChangeEvent, DragEvent, FormEvent, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { DOCUMENT_TYPES, MANUAL_SCOPES } from '@itp/shared';
-import { apiClient, ApiClientError, type MachineModelRecord } from '../lib/api-client';
+import { apiClient, ApiClientError, type MachineModelRecord, type MachineRecord } from '../lib/api-client';
 import { useApi } from '../lib/use-api';
 import { useToast } from '../lib/toast';
 import { titleCase, formatBytes } from '../lib/format';
@@ -35,6 +35,7 @@ const ACCEPTED_TYPES = ['application/pdf'];
 interface FormValues {
   title: string;
   scope: string;
+  machineId: string;
   machineModelId: string;
   documentType: string;
   documentVersion: string;
@@ -46,6 +47,7 @@ interface FormValues {
 const EMPTY: FormValues = {
   title: '',
   scope: 'model',
+  machineId: '',
   machineModelId: '',
   documentType: 'service',
   documentVersion: '',
@@ -66,6 +68,10 @@ export function ManualUploadPage(): JSX.Element {
 
   const { data: models, error: modelsError, refetch } = useApi<MachineModelRecord[]>(
     () => apiClient.listModels({ limit: 100 }).then((r) => r.data),
+    [],
+  );
+  const { data: machines, error: machinesError, refetch: refetchMachines } = useApi<MachineRecord[]>(
+    () => apiClient.listMachines({ limit: 100 }).then((r) => r.data),
     [],
   );
 
@@ -136,6 +142,8 @@ export function ManualUploadPage(): JSX.Element {
       next.title = 'A title of at least 3 characters is required.';
     if (values.scope === 'model' && !values.machineModelId)
       next.machineModelId = 'Select the machine model this manual applies to.';
+    if (values.scope === 'machine' && !values.machineId)
+      next.machineId = 'Select the machine this manual applies to.';
     if (!values.documentVersion.trim()) next.documentVersion = 'Document version is required.';
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -160,6 +168,8 @@ export function ManualUploadPage(): JSX.Element {
       form.append('documentVersion', values.documentVersion.trim());
       if (values.scope === 'model' && values.machineModelId)
         form.append('machineModelId', values.machineModelId);
+      if (values.scope === 'machine' && values.machineId)
+        form.append('machineId', values.machineId);
       if (values.documentNumber.trim()) form.append('documentNumber', values.documentNumber.trim());
       if (values.language.trim()) form.append('language', values.language.trim());
       if (values.description.trim()) form.append('description', values.description.trim());
@@ -200,11 +210,12 @@ export function ManualUploadPage(): JSX.Element {
       />
 
       {modelsError && <Card><ErrorState error={modelsError} onRetry={refetch} title="Could not load machine models" /></Card>}
+      {machinesError && <Card><ErrorState error={machinesError} onRetry={refetchMachines} title="Could not load machines" /></Card>}
       {!models && !modelsError && (
         <Card><LoadingState message="Loading machine models…" /></Card>
       )}
 
-      {models && (
+      {models && machines && (
         <Card>
           <form className="ui-form" onSubmit={onSubmit} noValidate>
             <div
@@ -248,6 +259,27 @@ export function ManualUploadPage(): JSX.Element {
                 <SelectInput id="scope" value={values.scope} onChange={(e) => set('scope', e.target.value)} disabled={uploading}>
                   {MANUAL_SCOPES.map((scope) => (
                     <option key={scope} value={scope}>{titleCase(scope)} manual</option>
+                  ))}
+                </SelectInput>
+              </Field>
+              <Field
+                label="Machine"
+                htmlFor="machineId"
+                required={values.scope === 'machine'}
+                error={errors.machineId}
+                hint={values.scope === 'model' ? 'Not required for a model-wide manual.' : 'This manual applies only to the selected machine.'}
+              >
+                <SelectInput
+                  id="machineId"
+                  value={values.machineId}
+                  onChange={(e) => set('machineId', e.target.value)}
+                  disabled={uploading || values.scope !== 'machine'}
+                >
+                  <option value="">Select machine…</option>
+                  {machines.map((machine) => (
+                    <option key={machine.id} value={machine.id}>
+                      {machine.displayName || machine.assetTag}
+                    </option>
                   ))}
                 </SelectInput>
               </Field>

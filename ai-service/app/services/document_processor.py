@@ -125,7 +125,7 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
             # ocr_pages will raise SERVICE_UNAVAILABLE if Tesseract is missing;
             # that is an explicit, actionable failure rather than a silent
             # empty result that would later surface as "No meaningful text".
-            ocr_results = await ocr_pages(str(pdf_path), poor_pages, ocr_language)
+            ocr_results = ocr_pages(str(pdf_path), poor_pages, ocr_language)
             for page in pages:
                 if page.page_number in ocr_results:
                     ocr_entry = ocr_results[page.page_number]
@@ -226,7 +226,18 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
         try:
             ollama = OllamaEmbeddingClient(settings)
             await ollama.ping()
-            embedding_model = opts.get("embedding_model", settings.embedding_model)
+            # The Ollama client uses the service setting, so payload metadata
+            # must use that same value. A stale caller option previously let
+            # all-minilm vectors be labelled as nomic-embed-text, causing the
+            # semantic-search model filter to exclude every chunk.
+            requested_embedding_model = opts.get("embedding_model")
+            embedding_model = settings.embedding_model
+            if requested_embedding_model and requested_embedding_model != embedding_model:
+                log.warning(
+                    "embedding_model_option_ignored",
+                    requested_embedding_model=requested_embedding_model,
+                    active_embedding_model=embedding_model,
+                )
             qdrant = new_qdrant_client(settings)
 
             # Probe dimension and ensure the collection matches it.
@@ -334,6 +345,12 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
             # surface the count in the failure reason.
             raise
         except Exception as exc:  # noqa: BLE001
+            log.exception(
+                "manual_processing_embedding_stage_unexpected_error",
+                error_type=exc.__class__.__name__,
+                page_count=page_count,
+                chunk_count=len(chunks),
+            )
             raise ServiceError(
                 "INTERNAL_SERVER_ERROR",
                 "Manual processing failed before indexing.",
