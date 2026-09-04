@@ -36,9 +36,9 @@ class OcrPageResult:
     confidence: float | None
 
 
-def tesseract_available() -> bool:
-    """Return True when the Tesseract executable is on PATH."""
-    return shutil.which("tesseract") is not None
+def tesseract_available(command: str | None = None) -> bool:
+    """Return True when Tesseract is configured or available on PATH."""
+    return bool(command and Path(command).is_file()) or shutil.which("tesseract") is not None
 
 
 def needs_ocr(pages: list[Any], min_characters: int) -> list[int]:
@@ -78,24 +78,31 @@ def render_page_to_image(pdf_path: str, page_number: int, dpi: int = OCR_DPI) ->
         doc.close()
 
 
-def ocr_page_image(image_bytes: bytes, language: str = "eng") -> tuple[str, float | None]:
+def ocr_page_image(
+    image_bytes: bytes,
+    language: str = "eng",
+    tesseract_cmd: str = "",
+) -> tuple[str, float | None]:
     """Run Tesseract on a rendered page image and return (text, confidence).
 
     Raises ServiceError when Tesseract is not installed so the caller can fail
     the job with an actionable message rather than a nonsense empty result.
     """
-    if not tesseract_available():
+    if not tesseract_available(tesseract_cmd):
         raise ServiceError(
             "SERVICE_UNAVAILABLE",
             (
                 "OCR is required for this PDF but Tesseract is not installed. "
-                "Install it (apt-get install tesseract-ocr) or set OCR_ENABLED=false "
-                "for text-based manuals."
+                "Install Tesseract and add it to PATH, set TESSERACT_CMD to the "
+                "full path of tesseract.exe, or set OCR_ENABLED=false for text-based manuals."
             ),
         )
 
     import pytesseract
     from PIL import Image
+
+    if tesseract_cmd:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
 
     try:
         img = Image.open(__import__("io").BytesIO(image_bytes))
@@ -126,6 +133,7 @@ def ocr_pages(
     pdf_path: str,
     pages: list[int],
     language: str = "eng",
+    tesseract_cmd: str = "",
 ) -> dict[int, OcrPageResult]:
     """OCR a set of pages. Returns a map of page_number -> result.
 
@@ -137,7 +145,7 @@ def ocr_pages(
     for page_number in pages:
         try:
             image = render_page_to_image(pdf_path, page_number)
-            text, confidence = ocr_page_image(image, language)
+            text, confidence = ocr_page_image(image, language, tesseract_cmd)
             results[page_number] = OcrPageResult(page_number, text, confidence)
         except ServiceError as exc:
             log.warning("ocr_page_failed", page=page_number, error=exc.message)

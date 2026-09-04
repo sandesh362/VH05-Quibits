@@ -87,7 +87,9 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
     writer: JobProgressWriter = new_progress_writer(settings, req.job_id)
     pdf_path = _resolve_pdf(settings, req.storage_path)
 
-    ocr_enabled = bool(opts.get("ocr_enabled", settings.OCR_ENABLED))
+    ocr_enabled = bool(opts.get("ocr_enabled", settings.OCR_ENABLED)) or bool(
+        opts.get("force_ocr", False)
+    )
     ocr_language = opts.get("ocr_language", settings.OCR_LANGUAGE)
     min_chars = int(
         opts.get("ocr_min_text_characters_per_page", settings.OCR_MIN_TEXT_CHARACTERS_PER_PAGE)
@@ -105,7 +107,9 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
         ocr_count = 0
         if poor_pages:
             await writer.update(current_stage="ocr_processing", progress_percent=25)
-            ocr_results = await ocr_pages(str(pdf_path), poor_pages, ocr_language)
+            ocr_results = await ocr_pages(
+                str(pdf_path), poor_pages, ocr_language, settings.TESSERACT_CMD
+            )
             for page in pages:
                 if page.page_number in ocr_results:
                     ocr_entry = ocr_results[page.page_number]
@@ -143,9 +147,14 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
 
         # ---- 5. Embeddings -----------------------------------------------------
         await writer.update(current_stage="embedding", progress_percent=65)
+        embedding_model = opts.get("embedding_model", settings.embedding_model)
+        if embedding_model != settings.embedding_model:
+            raise ServiceError(
+                "VALIDATION_ERROR",
+                "The requested embedding model does not match the configured Ollama embedding model.",
+            )
         ollama = OllamaEmbeddingClient(settings)
         await ollama.ping()
-        embedding_model = opts.get("embedding_model", settings.embedding_model)
         qdrant = new_qdrant_client(settings)
 
         # Probe dimension and ensure the collection matches it.
@@ -231,6 +240,8 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
         await writer.update(progress_percent=100)
         return result
     finally:
+        if "qdrant" in locals():
+            await qdrant.close()
         await writer.close()
 
 

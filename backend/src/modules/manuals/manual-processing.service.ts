@@ -28,6 +28,7 @@ import { isDuplicateKeyError, liveFilter } from '../../common/repository.js';
 import * as audit from '../audit/audit.service.js';
 import type { JobType } from '@itp/shared';
 import { processManual, type RagProcessResult } from './rag-client.service.js';
+import { enqueue } from './manual-processing-queue.js';
 
 export type Actor = { id: ObjectId; username: string; role: string };
 
@@ -97,6 +98,27 @@ export async function createProcessingJob(
     }
     throw error;
   }
+}
+
+function enqueueManualPipeline(
+  db: Db,
+  jobId: ObjectId,
+  manualId: ObjectId,
+  storagePath: string,
+  machineModelId: ObjectId | null,
+  machineId: ObjectId | null,
+  actor: Actor | null,
+): void {
+  enqueue(`manual:${manualId.toHexString()}`, () =>
+    runManualPipeline(db, {
+      jobId,
+      manualId,
+      storagePath,
+      machineModelId,
+      machineId,
+      actor,
+    }),
+  );
 }
 
 /** Persist the pages and chunks returned by FastAPI into MongoDB. */
@@ -374,6 +396,16 @@ export async function reprocessManual(
     metadata: { jobId: jobId.toHexString() },
   });
 
+  enqueueManualPipeline(
+    db,
+    jobId,
+    manualId,
+    manual.storage_path,
+    manual.machine_model_id ?? null,
+    manual.machine_id ?? null,
+    actor,
+  );
+
   return { jobId };
 }
 
@@ -409,6 +441,20 @@ export async function retryJob(
     requestId: requestId ?? null,
     metadata: { previousJobId: job._id.toHexString(), newJobId: newJobId.toHexString() },
   });
+
+  await collections.manuals(db).updateOne(
+    { _id: job.manual_id },
+    { $set: { processing_status: 'queued', indexed_chunk_count: 0, indexed_at: null, updated_at: new Date() } },
+  );
+  enqueueManualPipeline(
+    db,
+    newJobId,
+    job.manual_id,
+    manual.storage_path,
+    manual.machine_model_id ?? null,
+    manual.machine_id ?? null,
+    actor,
+  );
 
   return { jobId: newJobId };
 }

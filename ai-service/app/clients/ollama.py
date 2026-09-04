@@ -33,7 +33,7 @@ class OllamaEmbeddingClient:
         self.base_url = settings.OLLAMA_BASE_URL
         self.timeout = settings.ollama_timeout_seconds
 
-    async def ping(self) -> dict[str, Any]:
+    async def ping(self, model: str | None = None) -> dict[str, Any]:
         """Verify Ollama is reachable and the configured embedding model is present.
 
         Returns the model info on success. Raises ServiceError (SERVICE_UNAVAILABLE)
@@ -56,7 +56,7 @@ class OllamaEmbeddingClient:
             )
 
         installed = [m.get("name", "") for m in response.json().get("models", [])]
-        wanted = self.settings.embedding_model
+        wanted = model or self.settings.embedding_model
 
         def present(name: str) -> bool:
             base = name.split(":")[0]
@@ -70,7 +70,12 @@ class OllamaEmbeddingClient:
 
         return {"model": wanted, "installed": installed}
 
-    async def embed(self, texts: list[str], prefix: str = DOCUMENT_PREFIX) -> list[list[float]]:
+    async def embed(
+        self,
+        texts: list[str],
+        prefix: str = DOCUMENT_PREFIX,
+        model: str | None = None,
+    ) -> list[list[float]]:
         """Embed a batch of texts with the given prefix.
 
         Validates: a non-empty response, one vector per input, and a non-empty
@@ -81,11 +86,12 @@ class OllamaEmbeddingClient:
             return []
 
         prefixed = [f"{prefix}{t}" for t in texts]
+        selected_model = model or self.settings.embedding_model
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
                     f"{self.base_url}/api/embed",
-                    json={"model": self.settings.embedding_model, "input": prefixed},
+                    json={"model": selected_model, "input": prefixed},
                 )
         except Exception as exc:  # noqa: BLE001
             raise ServiceError(
@@ -128,13 +134,13 @@ class OllamaEmbeddingClient:
 
         return vectors
 
-    async def dimension_probe(self) -> int:
+    async def dimension_probe(self, model: str | None = None) -> int:
         """Embed a probe string and return its vector dimension.
 
         Called at pipeline start and compared against the Qdrant collection's
         configured dimension. A mismatch is a fatal, explicit error.
         """
-        vectors = await self.embed(["dimension probe"], prefix=DOCUMENT_PREFIX)
+        vectors = await self.embed(["dimension probe"], prefix=DOCUMENT_PREFIX, model=model)
         return len(vectors[0])
 
 
