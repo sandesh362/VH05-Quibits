@@ -32,9 +32,9 @@ CAPABILITY_BY_DEPENDENCY: dict[str, list[str]] = {
     "mongodb": ["job_progress_reporting"],
 }
 
-# Phase 4: retrieval and evidence-grounded RAG are implemented. Incident
-# memory and maintenance intelligence remain Phase 5+ and are not advertised.
-PHASE_4_FEATURES: dict[str, bool] = {
+# Phase 5: conversation-aware RAG. Incident memory and maintenance
+# intelligence remain later phases and are not advertised.
+PHASE_5_FEATURES: dict[str, bool] = {
     "pdf_extraction": True,
     "ocr": True,
     "chunking": True,
@@ -43,6 +43,7 @@ PHASE_4_FEATURES: dict[str, bool] = {
     "retrieval": True,
     "rag_answers": True,
     "citation_validation": True,
+    "conversation_context": True,
 }
 
 
@@ -124,10 +125,10 @@ async def system_info(request: Request) -> dict:
         apiPrefix=settings.RAG_API_PREFIX,
         pythonVersion=sys.version.split()[0],
         platform=f"{platform.system()} {platform.machine()}",
-        phase="Phase 4 - Retrieval Engine and RAG Pipeline",
+        phase="Phase 5 - Conversational Troubleshooting",
         startedAt=_STARTED_AT.isoformat().replace("+00:00", "Z"),
         uptimeSeconds=_uptime_seconds(),
-        features=PHASE_4_FEATURES,
+        features=PHASE_5_FEATURES,
         configuredDependencies=["qdrant", "ollama", "mongodb"],
     )
     return success_envelope(payload.model_dump(), get_request_id(request))

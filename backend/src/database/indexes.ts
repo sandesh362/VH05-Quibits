@@ -194,7 +194,10 @@ export async function ensureIndexes(db: Db): Promise<IndexReport[]> {
     // The user's own list, most recent first.
     { key: { user_id: 1, last_message_at: -1 }, name: 'user_recent' },
     { key: { machine_id: 1, created_at: -1 }, name: 'machine_recent', sparse: true },
+    { key: { machine_model_id: 1, created_at: -1 }, name: 'model_recent', sparse: true },
     { key: { status: 1, is_deleted: 1 }, name: 'status_live' },
+    { key: { issue_status: 1, is_deleted: 1 }, name: 'issue_status_live' },
+    { key: { created_at: -1 }, name: 'created_recent' },
   ]);
   report.push({ collection: 'conversations', created: conversationIndexes });
 
@@ -203,8 +206,21 @@ export async function ensureIndexes(db: Db): Promise<IndexReport[]> {
     // within a conversation.
     { key: { conversation_id: 1, sequence: 1 }, name: 'uniq_conv_sequence', unique: true },
     { key: { conversation_id: 1, created_at: 1 }, name: 'conv_chronological' },
+    {
+      key: { conversation_id: 1, idempotency_key: 1 },
+      name: 'uniq_idempotency',
+      unique: true,
+      partialFilterExpression: { idempotency_key: { $type: 'string' } },
+    },
   ]);
   report.push({ collection: 'messages', created: messageIndexes });
+
+  const conversationActionIndexes = await collections.conversationActions(db).createIndexes([
+    { key: { conversation_id: 1, created_at: -1 }, name: 'conversation_recent' },
+    { key: { conversation_id: 1, performed_at: -1 }, name: 'conversation_performed' },
+    { key: { created_by: 1, created_at: -1 }, name: 'actor_recent' },
+  ]);
+  report.push({ collection: 'conversation_actions', created: conversationActionIndexes });
 
   // -------------------------------------------------------------------------
   // incidents

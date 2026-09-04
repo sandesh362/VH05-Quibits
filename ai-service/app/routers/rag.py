@@ -18,7 +18,7 @@ router = APIRouter(tags=["rag"])
 
 
 class RagAnswerRequestModel(BaseModel):
-    query: str = Field(min_length=1, max_length=2000)
+    query: str = Field(min_length=1, max_length=5000)
     machine_id: str | None = None
     machine_model_id: str | None = None
     manual_id: str | None = None
@@ -27,6 +27,7 @@ class RagAnswerRequestModel(BaseModel):
     manufacturer: str | None = None
     include_inactive: bool = False
     conversation_id: str | None = None
+    conversation_context: dict[str, Any] | None = None
     debug: bool = False
     top_k: int | None = Field(default=None, ge=1, le=50)
 

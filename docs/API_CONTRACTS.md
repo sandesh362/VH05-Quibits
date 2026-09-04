@@ -156,53 +156,38 @@ down.
 `page_count` (a `404` otherwise). Rendered server-side from the PDF; the path is derived from
 `manual_id`, never from user input.
 
-### 2.6 `/api/v1/conversations`
+### 2.6 `/api/v1/conversations` — conversational troubleshooting (Phase 5)
+
+Chat is a conversation resource. There is **no** public `POST /troubleshooting/query`.
 
 | Method | Route | Purpose | Auth | Sync |
 |---|---|---|---|---|
-| POST | `/` | Create (optionally bound to a machine) | non-viewer **[U]** | sync |
-| GET | `/` | List own (managers/admins: all) | any | sync |
-| GET | `/:id` | Detail + messages | owner/manager/admin | sync |
-| PATCH | `/:id` | Rename, archive, set/switch machine | owner | sync |
-| DELETE | `/:id` | Soft delete | owner/admin | sync |
-| GET | `/:id/messages` | Paginated messages | owner/manager/admin | sync |
+| POST | `/` | Create, optionally bound to machine / model / manual | `conversation.create` | sync |
+| GET | `/` | List (`?status=&issueStatus=&machineId=&search=`) | own, or `read_any` | sync |
+| GET | `/:id` | Detail (no messages) | owner / manager / admin | sync |
+| PATCH | `/:id` | Rename / issue summary / symptoms | owner / manager / admin | sync |
+| DELETE | `/:id` | Soft delete | owner / admin | sync |
+| GET | `/:id/messages` | Paginated transcript | owner / manager / admin | sync |
+| POST | `/:id/messages` | Ask a question → persist user turn, then RAG | `conversation.create` | **sync** (long) |
+| POST | `/:id/actions` | Record a technician action | `conversation.create` | sync |
+| GET | `/:id/actions` | List technician actions | owner / manager / admin | sync |
+| PATCH | `/:id/issue-status` | Explicit issue status (never inferred from AI) | owner | sync |
+| POST | `/:id/close` | Close without deleting history | owner | sync |
+| POST | `/:id/reopen` | Reopen a closed/archived thread | owner | sync |
+| POST | `/:id/archive` | Archive | owner | sync |
 
-`PATCH` machine switch requires `reason` and appends to `context_switches[]` — scope never
-changes silently.
+**POST /:id/messages** — `{ content, clientRequestId? }` + optional `Idempotency-Key`.
+The user message is stored **before** FastAPI is called. Follow-ups send a bounded
+`conversation_context` (confirmed technician facts + recent turns). Ambiguous pronoun
+follow-ups with several suggested checks return `clarification_required` without retrieval.
+If FastAPI is down: `503 DEPENDENCY_UNAVAILABLE` and the user message remains.
+If only Ollama is down: HTTP 200 with `rag.status: "generation_failed"`.
+AI suggestions are stored on the assistant message; they are **not** technician actions.
+Issue status is never auto-resolved from an answer.
 
-### 2.7 `/api/v1/troubleshooting` — the core
+### 2.7 `/api/v1/troubleshooting`
 
-| Method | Route | Purpose | Auth | Sync |
-|---|---|---|---|---|
-| POST | `/query` | Ask a question → validated structured answer | non-viewer **[U]** | **sync** (long) |
-| POST | `/clarify` | Answer a clarification (machine/model/code choice) | non-viewer | sync |
-| POST | `/feedback` | 👍/👎 + reason on a message **[R]** | non-viewer | sync |
-
-**POST /query**
-```jsonc
-// request
-{ "conversation_id": "…",            // optional; created if absent
-  "machine_id": "…",                 // optional if the conversation is bound
-  "machine_model_id": "…",           // optional alternative scope
-  "query": "E-041 on the injection axis, machine stops mid-shot",
-  "options": { "include_history": true, "include_maintenance": true,
-               "cross_model_history": false, "debug": false } }
-```
-→ `200 { conversation_id, message_id, response: <RAG response contract> }` (see
-`RAG_PIPELINE.md` §9).
-Validation: query 1–2000 chars; conversation ownership; machine/model exists; at least one
-scope resolvable, else the response itself is `clarification_required` (**not** an HTTP error —
-clarification is a normal outcome).
-Errors: `422` invalid input; `403` not the owner; `429` rate limit (30/min/user **[A]**);
-`503 SERVICE_UNAVAILABLE` only if FastAPI itself is unreachable — **if only Ollama is down the
-call returns `200` with `answer_status: "generation_unavailable"` and retrieval results**
-(AC-14).
-**Idempotency:** not idempotent by design (each query is a new turn); **[R]** an
-`Idempotency-Key` may be honoured for 60 s to protect against double-taps on a tablet.
-**Timeout:** 90 s hard **[A]**, with a client-visible countdown. **[R]** Optional SSE variant
-`POST /query/stream` — post-MVP.
-**Sec:** the retrieval filter is server-derived; injection scanning; audit on suspicion; the
-`debug` option (retrieval trace) is admin/manager-only.
+Not implemented in Phase 5. Use `POST /api/v1/conversations/:id/messages`.
 
 ### 2.8 `/api/v1/incidents`
 

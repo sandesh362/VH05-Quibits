@@ -35,6 +35,30 @@ def test_user_query_is_wrapped_as_untrusted() -> None:
     assert messages[0]["content"] == SYSTEM_PROMPT
 
 
+def test_conversation_history_is_untrusted_except_confirmed() -> None:
+    extracted = normalize_query("What should I check first?")
+    messages = build_messages(
+        extracted=extracted,
+        scope=ScopeFilter(machine_model_id=MODEL_A),
+        evidence_block="SOURCE_ID: source-1",
+        allowed_source_ids=["source-1"],
+        conversation_context={
+            "issue_summary": "Hydraulic pressure drops during startup",
+            "confirmed_findings": ["Fluid level was normal"],
+            "recent_messages": [
+                {"role": "assistant", "content": "Check the suction strainer.", "confirmed": False},
+                {"role": "user", "content": "I already checked the fluid level.", "confirmed": True},
+            ],
+        },
+    )
+    user = messages[1]["content"]
+    assert "CONFIRMED (technician-recorded facts" in user
+    assert "Fluid level was normal" in user
+    assert "UNVERIFIED" in user
+    assert "Check the suction strainer." in user
+    assert "CONFIRMED" in SYSTEM_PROMPT
+
+
 def test_format_omits_empty_sections() -> None:
     text = format_answer_from_structured(
         {

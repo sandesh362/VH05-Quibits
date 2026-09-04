@@ -41,6 +41,29 @@ describe('apiClient success handling', () => {
     expect(result).toEqual(payload);
   });
 
+  it('sends chat messages to Express, never to FastAPI or Ollama', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        successEnvelope({
+          message: { id: 'a1', role: 'assistant' },
+          userMessage: { id: 'u1', role: 'user' },
+          rag: { status: 'answered', sources: [], warnings: [] },
+          conversation: { id: 'c1', issueStatus: 'investigating', status: 'active', messageCount: 2 },
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiClient.sendMessage('c1', 'Why is error E-104 appearing?', 'client-req-1');
+
+    const url = fetchMock.mock.calls[0]?.[0] as string;
+    expect(url).toBe('/api/v1/conversations/c1/messages');
+    expect(url).not.toContain('8000');
+    expect(url).not.toContain('11434');
+    expect(url).not.toContain('6333');
+    expect(url.startsWith('/')).toBe(true);
+  });
+
   it('requests a relative URL so the call stays same-origin', async () => {
     const fetchMock = vi
       .fn()

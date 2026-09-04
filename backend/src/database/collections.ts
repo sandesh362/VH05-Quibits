@@ -19,6 +19,7 @@ import type {
   Criticality,
   DocumentType,
   IncidentStatus,
+  IssueStatus,
   JobStatus,
   JobType,
   MachineStatus,
@@ -26,9 +27,13 @@ import type {
   MaintenanceType,
   ManualScope,
   MessageRole,
+  MessageStatus,
+  MessageType,
   ProcessingStatus,
   ResolutionStatus,
   Severity,
+  SuggestedActionStatus,
+  TechnicianActionStatus,
   UserRole,
 } from '@itp/shared';
 
@@ -287,38 +292,124 @@ export interface ManualChunkDoc extends BaseDoc {
 }
 
 // ---------------------------------------------------------------------------
-// conversations / messages  (persistence only - no chat in Phase 2)
+// conversations / messages / conversation_actions  (Phase 5 chat)
 // ---------------------------------------------------------------------------
+
+export interface ConversationSnapshot {
+  manufacturer?: string | null;
+  model_name?: string | null;
+  machine_type?: string | null;
+  asset_tag?: string | null;
+  display_name?: string | null;
+}
+
+export interface ManualSnapshot {
+  title?: string | null;
+  document_version?: string | null;
+}
+
+export interface IssueStatusChange {
+  from: IssueStatus;
+  to: IssueStatus;
+  changed_by: ObjectId;
+  confirmation_note: string | null;
+  at: Date;
+}
 
 export interface ConversationDoc extends BaseDoc, SoftDeletable {
   _id: ObjectId;
   user_id: ObjectId;
+  created_by: ObjectId;
   title?: string | null;
   machine_id?: ObjectId | null;
   machine_model_id?: ObjectId | null;
+  manual_id?: ObjectId | null;
+  manual_version?: string | null;
   scope_source?: string | null;
+  machine_snapshot?: ConversationSnapshot | null;
+  model_snapshot?: ConversationSnapshot | null;
+  manual_snapshot?: ManualSnapshot | null;
   status: ConversationStatus;
+  issue_status: IssueStatus;
+  issue_summary?: string | null;
+  error_codes: string[];
+  symptoms: string[];
+  operating_conditions: string[];
+  attempted_actions: string[];
+  confirmed_findings: string[];
   turn_count: number;
+  message_count: number;
   last_message_at?: Date | null;
+  started_at: Date;
+  closed_at?: Date | null;
+  closed_by?: ObjectId | null;
+  archived_at?: Date | null;
+  archived_by?: ObjectId | null;
+  reopened_at?: Date | null;
+  reopened_by?: ObjectId | null;
+  issue_status_history: IssueStatusChange[];
   incident_ids: ObjectId[];
 }
 
-export interface MessageDoc {
+export interface MessageSource {
+  source_id: string;
+  chunk_id: string;
+  manual_id: string;
+  manual_title: string;
+  manual_version: string | null;
+  page_start: number;
+  page_end: number;
+  section_title: string | null;
+  machine_model_id: string | null;
+  excerpt?: string | null;
+}
+
+export interface SuggestedAction {
+  id: string;
+  description: string;
+  source_ids: string[];
+  status: SuggestedActionStatus;
+}
+
+export interface MessageDoc extends BaseDoc {
   _id: ObjectId;
   conversation_id: ObjectId;
   role: MessageRole;
+  message_type: MessageType;
   sequence: number;
   content_text?: string | null;
+  original_query?: string | null;
+  normalized_query?: string | null;
+  status: MessageStatus;
+  sources: MessageSource[];
+  retrieval_metadata?: Record<string, unknown> | null;
+  machine_context?: Record<string, unknown> | null;
+  suggested_actions: SuggestedAction[];
+  clarification?: string | null;
+  refusal_reason?: string | null;
   /**
-   * The validated structured response (Phase 5). Stored ALONGSIDE
-   * `content_text`, never instead of it - see docs/PHASE_2_IMPLEMENTATION.md
-   * for why both are kept.
+   * The validated structured response. Stored ALONGSIDE `content_text`, never
+   * instead of it - the structured form drives the UI, the text form stays
+   * readable when the schema changes.
    */
   structured_response?: Record<string, unknown> | null;
   answer_status?: string | null;
   confidence?: string | null;
-  created_at: Date;
-  schema_version: number;
+  created_by?: ObjectId | null;
+  idempotency_key?: string | null;
+  content_fingerprint?: string | null;
+}
+
+export interface ConversationActionDoc extends BaseDoc {
+  _id: ObjectId;
+  conversation_id: ObjectId;
+  created_by: ObjectId;
+  action: string;
+  result?: string | null;
+  status: TechnicianActionStatus;
+  performed_at: Date;
+  notes?: string | null;
+  source_message_id?: ObjectId | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -487,6 +578,7 @@ export const COLLECTIONS = {
   manualChunks: 'manual_chunks',
   conversations: 'conversations',
   messages: 'messages',
+  conversationActions: 'conversation_actions',
   incidents: 'incidents',
   incidentActions: 'incident_actions',
   maintenanceRecords: 'maintenance_records',
@@ -508,6 +600,8 @@ export const collections = {
   conversations: (db: Db): Collection<ConversationDoc> =>
     db.collection<ConversationDoc>(COLLECTIONS.conversations),
   messages: (db: Db): Collection<MessageDoc> => db.collection<MessageDoc>(COLLECTIONS.messages),
+  conversationActions: (db: Db): Collection<ConversationActionDoc> =>
+    db.collection<ConversationActionDoc>(COLLECTIONS.conversationActions),
   incidents: (db: Db): Collection<IncidentDoc> => db.collection<IncidentDoc>(COLLECTIONS.incidents),
   incidentActions: (db: Db): Collection<IncidentActionDoc> =>
     db.collection<IncidentActionDoc>(COLLECTIONS.incidentActions),

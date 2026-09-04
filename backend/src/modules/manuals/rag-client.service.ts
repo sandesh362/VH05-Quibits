@@ -147,6 +147,7 @@ export interface RagInternalQuery {
   manufacturer?: string | null;
   include_inactive?: boolean;
   conversation_id?: string | null;
+  conversation_context?: Record<string, unknown> | null;
   debug?: boolean;
   top_k?: number;
 }

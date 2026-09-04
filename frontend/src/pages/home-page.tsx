@@ -20,7 +20,7 @@ const FEATURE_LABELS: Record<string, string> = {
   embeddings: 'Local embeddings (Ollama)',
   vectorSearch: 'Vector search (Qdrant)',
   ragAnswers: 'Grounded RAG answers',
-  incidentMemory: 'Incident memory',
+  incidentMemory: 'Incident memory retrieval',
   maintenanceHistory: 'Maintenance history',
 };
 
@@ -31,8 +31,8 @@ const PHASE_BY_FEATURE: Record<string, string> = {
   ocr: 'Phase 3',
   embeddings: 'Phase 3',
   vectorSearch: 'Phase 4',
-  ragAnswers: 'Phase 4',
-  incidentMemory: 'Phase 5+',
+  ragAnswers: 'Phase 4–5',
+  incidentMemory: 'Phase 6+',
   maintenanceHistory: 'Phase 2',
 };
 
@@ -47,8 +47,8 @@ export function HomePage(): JSX.Element {
         <h1>Industrial Troubleshooting Platform</h1>
         <p className="page__lead">
           A locally running troubleshooting assistant for industrial maintenance technicians.
-          Manuals, past incidents and maintenance history, grounded with citations — with no
-          cloud AI service involved.
+          Sign in to start a conversation scoped to a machine or model. Answers come from
+          indexed manuals with citations — never from the cloud.
         </p>
       </header>
 
@@ -121,8 +121,8 @@ export function HomePage(): JSX.Element {
         <section className="card" aria-labelledby="features-heading">
           <h2 id="features-heading">Implementation status</h2>
           <p className="page__note page__note--top">
-            Reported by the backend, not hardcoded here. Nothing below is implemented yet —
-            Phase 1 builds only the foundation.
+            Reported by the backend, not hardcoded here. Conversational troubleshooting is
+            available; incident-memory retrieval is not.
           </p>
 
           <ul className="feature-list">

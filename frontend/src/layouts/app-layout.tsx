@@ -3,20 +3,12 @@
  * Responsive down to a phone; comfortable on a shop-floor tablet.
  */
 import { NavLink, Outlet } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
 import './app-layout.css';
 
-const NAV_ITEMS: ReadonlyArray<{
-  to: string;
-  label: string;
-  end: boolean;
-  external?: boolean;
-}> = [
-  { to: '/', label: 'Home', end: true },
-  { to: '/status', label: 'Service status', end: false },
-  { to: '/lab.html', label: 'RAG lab', end: false, external: true },
-];
-
 export function AppLayout(): JSX.Element {
+  const { user, logout } = useAuth();
+
   return (
     <div className="layout">
       <header className="layout__header">
@@ -27,28 +19,33 @@ export function AppLayout(): JSX.Element {
             </span>
             <div>
               <span className="layout__title">Industrial Troubleshooting Platform</span>
-              <span className="layout__phase">Phase 4 · Retrieval &amp; RAG</span>
+              <span className="layout__phase">Phase 5 · Conversational troubleshooting</span>
             </div>
           </div>
 
           <nav className="layout__nav" aria-label="Main navigation">
-            {NAV_ITEMS.map((item) =>
-              'external' in item && item.external ? (
-                <a key={item.to} href={item.to} className="layout__nav-link">
-                  {item.label}
-                </a>
-              ) : (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    isActive ? 'layout__nav-link layout__nav-link--active' : 'layout__nav-link'
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ),
+            <NavLink to="/" end className={({ isActive }) => navClass(isActive)}>
+              Home
+            </NavLink>
+            <NavLink to="/status" className={({ isActive }) => navClass(isActive)}>
+              Service status
+            </NavLink>
+            {user && (
+              <NavLink to="/conversations" className={({ isActive }) => navClass(isActive)}>
+                Troubleshoot
+              </NavLink>
+            )}
+            <a href="/lab.html" className="layout__nav-link">
+              RAG lab
+            </a>
+            {user ? (
+              <button type="button" className="layout__nav-link layout__nav-button" onClick={() => void logout()}>
+                Sign out
+              </button>
+            ) : (
+              <NavLink to="/login" className={({ isActive }) => navClass(isActive)}>
+                Sign in
+              </NavLink>
             )}
           </nav>
         </div>
@@ -67,4 +64,8 @@ export function AppLayout(): JSX.Element {
       </footer>
     </div>
   );
+}
+
+function navClass(isActive: boolean): string {
+  return isActive ? 'layout__nav-link layout__nav-link--active' : 'layout__nav-link';
 }

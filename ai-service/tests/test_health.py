@@ -97,13 +97,13 @@ class TestSystemInfoEndpoint:
         assert response.status_code == 200
         data = response.json()["data"]
         assert data["service"] == "rag-service"
-        assert "Phase 4" in data["phase"]
+        assert "Phase 5" in data["phase"]
         assert data["pythonVersion"]
 
-    def test_phase_4_retrieval_and_rag_enabled(
+    def test_phase_5_conversation_context_enabled(
         self, client: TestClient, api_prefix: str
     ) -> None:
-        """Phase 4 ships retrieval + evidence-grounded RAG."""
+        """Phase 5 ships conversation-aware RAG on top of retrieval."""
         data = client.get(f"{api_prefix}/system/info").json()["data"]
         features = data["features"]
         assert features["pdf_extraction"] is True
@@ -114,6 +114,7 @@ class TestSystemInfoEndpoint:
         assert features["retrieval"] is True
         assert features["rag_answers"] is True
         assert features["citation_validation"] is True
+        assert features["conversation_context"] is True
 
     def test_does_not_leak_urls_or_credentials(
         self, client: TestClient, api_prefix: str
