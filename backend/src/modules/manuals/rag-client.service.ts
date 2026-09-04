@@ -233,9 +233,6 @@ export async function processManual(options: RagProcessOptions): Promise<RagProc
 
   let response: Response;
   try {
-    const { force_ocr, ocr_enabled, ocr_language, ocr_min_text_characters_per_page,
-      chunk_size, chunk_overlap, min_chunk_size, max_chunk_size, chunking_version,
-      embedding_model, collection_name, delete_existing, ...request } = options;
     response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -243,23 +240,7 @@ export async function processManual(options: RagProcessOptions): Promise<RagProc
         'X-Internal-Token': config.ragService.internalToken,
         'X-Request-Id': options.job_id,
       },
-      body: JSON.stringify({
-        ...request,
-        options: {
-          force_ocr,
-          ocr_enabled,
-          ocr_language,
-          ocr_min_text_characters_per_page,
-          chunk_size,
-          chunk_overlap,
-          min_chunk_size,
-          max_chunk_size,
-          chunking_version,
-          embedding_model,
-          collection_name,
-          delete_existing,
-        },
-      }),
+      body: JSON.stringify(options),
       signal: controller.signal,
     });
   } catch (error) {

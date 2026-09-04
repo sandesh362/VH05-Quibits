@@ -57,7 +57,8 @@ function splitLines(value: string): string[] {
 export function IncidentNewPage(): JSX.Element {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const presetMachine = new URLSearchParams(window.location.search).get('machineId') ?? '';
+  const [form, setForm] = useState<FormState>({ ...EMPTY, machineId: presetMachine });
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -70,7 +71,7 @@ export function IncidentNewPage(): JSX.Element {
         ? apiClient.listUsers().then((r) => r.users)
         : Promise.resolve([] as Array<{ id: string; username: string; fullName: string; role: string }>),
   );
-  const manuals = useApi<ManualRecord[]>(() => apiClient.listManuals().then((r) => r.data));
+  const manuals = useApi<ManualRecord[]>(() => apiClient.listManuals({ limit: 100 }).then((r) => r.data));
 
   const selectedMachine = useMemo(
     () => machines.data?.find((machine) => machine.id === form.machineId) ?? null,

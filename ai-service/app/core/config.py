@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=(str(REPO_ROOT / ".env"), str(REPO_ROOT / "backend" / ".env")),
+        env_file=str(REPO_ROOT / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -107,7 +107,6 @@ class Settings(BaseSettings):
     # Whether OCR is automatically applied to text-poor pages.
     OCR_ENABLED: bool = Field(default=True)
     OCR_LANGUAGE: str = Field(default="eng")
-    TESSERACT_CMD: str = Field(default="")
     # A page with fewer extractable characters than this is considered text-poor
     # and routed to OCR (when enabled).
     OCR_MIN_TEXT_CHARACTERS_PER_PAGE: int = Field(default=50, ge=1, le=100_000)

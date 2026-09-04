@@ -58,7 +58,8 @@ const MAINTENANCE_TYPES = [
 
 export function MaintenanceNewPage(): JSX.Element {
   const navigate = useNavigate();
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const presetMachine = new URLSearchParams(window.location.search).get('machineId') ?? '';
+  const [form, setForm] = useState<FormState>({ ...EMPTY, machineId: presetMachine });
   const [errors, setErrors] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -122,7 +123,7 @@ export function MaintenanceNewPage(): JSX.Element {
         notes: form.notes.trim() || undefined,
         partsReplaced: partsReplaced.length > 0 ? partsReplaced : undefined,
       });
-      navigate(`/machines/${result.maintenanceRecord.machineId}`);
+      navigate(`/maintenance/${result.maintenanceRecord.id}`);
     } catch (caught) {
       setErrors([
         caught instanceof ApiClientError

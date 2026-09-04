@@ -52,6 +52,14 @@ export function HomePage(): JSX.Element {
           Sign in to start a conversation scoped to a machine or model. Answers come from
           indexed manuals with citations — never from the cloud.
         </p>
+        <div className="page__header-actions" style={{ marginTop: 'var(--space-md)' }}>
+          <Link to="/login" className="btn btn--primary">
+            Sign in
+          </Link>
+          <Link to="/dashboard" className="btn btn--secondary">
+            Open dashboard
+          </Link>
+        </div>
       </header>
 
       <section className="card" aria-labelledby="connection-heading">

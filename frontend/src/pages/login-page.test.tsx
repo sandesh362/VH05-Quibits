@@ -43,8 +43,8 @@ describe('LoginPage', () => {
 
     renderLogin();
     await userEvent.type(screen.getByLabelText(/email/i), 'tech@example.test');
-    await userEvent.type(screen.getByLabelText(/password/i), 'Str0ng-Test-Pass!42');
-    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
+    await userEvent.type(document.getElementById('login-password') as HTMLInputElement, 'Str0ng-Test-Pass!42');
+    await userEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
 
     await waitFor(() => expect(login).toHaveBeenCalledWith('tech@example.test', 'Str0ng-Test-Pass!42'));
     expect(sessionStorage.getItem('itp.accessToken')).toBe('access-token');
@@ -56,8 +56,8 @@ describe('LoginPage', () => {
     );
     renderLogin();
     await userEvent.type(screen.getByLabelText(/email/i), 'tech@example.test');
-    await userEvent.type(screen.getByLabelText(/password/i), 'wrong');
-    await userEvent.click(screen.getByRole('button', { name: /sign in/i }));
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/invalid email or password/i));
+    await userEvent.type(document.getElementById('login-password') as HTMLInputElement, 'wrong');
+    await userEvent.click(screen.getByRole('button', { name: /^sign in$/i }));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/check your email and password/i));
   });
 });

@@ -973,14 +973,15 @@ function SimilarSection({
   similar: { data: SimilarIncidentRecord[] | null; error: ApiClientError | null; isLoading: boolean; refetch: () => void };
 }): JSX.Element {
   return (
-    <section className="card incident-section" aria-label="Similar incidents">
-      <h2>Similar historical incidents</h2>
+    <section className="card incident-section" aria-label="Historical troubleshooting evidence">
+      <h2>Historical troubleshooting evidence</h2>
       <div className="historical-disclaimer">
         <span className="historical-disclaimer__icon" aria-hidden="true">⚠</span>
         <span>
-          Historical evidence is supplementary context, not proof. A similar past incident does
-          NOT confirm the current root cause, and a previous fix will not necessarily solve this
-          problem. Manual instructions always take precedence.
+          <strong>Similar historical incidents provide context only.</strong> They do not confirm
+          the root cause of the current issue. A previous fix will not necessarily solve this
+          problem, and rejected or unresolved history is never a recommendation. Manual
+          instructions always take precedence.
         </span>
       </div>
 
@@ -1006,13 +1007,22 @@ function SimilarSection({
                 {item.incidentNumber}: {item.title}
               </Link>
             </strong>{' '}
-            {item.confirmed ? (
+
+            {item.rootCauseStatus === 'confirmed' || item.confirmed ? (
               <span className="ibadge ibadge--ok ibadge--sm" data-status="confirmed">
-                <span className="ibadge__icon" aria-hidden="true">✓</span> Confirmed outcome
+                <span className="ibadge__icon" aria-hidden="true">✓</span> Confirmed history
+              </span>
+            ) : item.rootCauseStatus === 'rejected' ? (
+              <span className="ibadge ibadge--error ibadge--sm" data-status="rejected">
+                <span className="ibadge__icon" aria-hidden="true">✕</span> Rejected history
+              </span>
+            ) : item.status === 'closed' || item.status === 'resolved' ? (
+              <span className="ibadge ibadge--neutral ibadge--sm" data-status="unresolved">
+                <span className="ibadge__icon" aria-hidden="true">·</span> Unresolved history
               </span>
             ) : (
-              <span className="ibadge ibadge--warn ibadge--sm" data-status="speculative">
-                <span className="ibadge__icon" aria-hidden="true">◐</span> Speculative
+              <span className="ibadge ibadge--warn ibadge--sm" data-status="suspected">
+                <span className="ibadge__icon" aria-hidden="true">◐</span> Suspected only
               </span>
             )}
           </div>

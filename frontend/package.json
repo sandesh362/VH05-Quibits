@@ -6,7 +6,6 @@
   "description": "React + Vite web interface (Phase 1: service status only)",
   "scripts": {
     "dev": "npm run build --workspace @itp/shared && vite",
-    "dev:runtime": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",

@@ -39,7 +39,6 @@
     "create-admin": "npm run create-admin --workspace @itp/backend"
   },
   "devDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.34.8",
     "concurrently": "^9.1.2"
   }
 }
