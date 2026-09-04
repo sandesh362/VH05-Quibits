@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # Empty until an operator pulls a model. Never assume one is installed.
     OLLAMA_CHAT_MODEL: str = Field(default="llama3.1")
     OLLAMA_EMBEDDING_MODEL: str = Field(default="nomic-embed-text")
-    OLLAMA_TIMEOUT_MS: int = Field(default=90_000, ge=100, le=120_000)
+    OLLAMA_TIMEOUT_MS: int = Field(default=5000, ge=100, le=120_000)
 
     # -- Retrieval / RAG (Phase 4) -------------------------------------------
     RAG_TEMPERATURE: float = Field(default=0.1, ge=0.0, le=1.0)

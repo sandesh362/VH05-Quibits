@@ -709,6 +709,8 @@ export interface MessageView {
   normalizedQuery: string | null;
   status: MessageStatus;
   sources: RagSourceView[];
+  /** Full RAG payload (all evidence lanes incl. historical/maintenance with sourceType). */
+  structuredResponse: Record<string, unknown> | null;
   retrievalMetadata: Record<string, unknown> | null;
   machineContext: Record<string, unknown> | null;
   suggestedActions: SuggestedActionView[];

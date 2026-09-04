@@ -66,7 +66,8 @@ source .venv/bin/activate            # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 ```
 
-`npm run dev:ai` uses `scripts/dev-ai.mjs`, which picks `ai-service/.venv` (Windows `Scripts\\python.exe` or Unix `bin/python`). You do not need to activate the venv first.
+`npm run dev:ai` calls `.venv`'s interpreter directly, so it works without
+activation — provided the venv exists.
 
 ### The FastAPI service exits immediately with no message
 
