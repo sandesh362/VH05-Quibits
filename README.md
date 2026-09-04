@@ -7,11 +7,13 @@ It combines **machine manuals**, **machine context**, **past incidents**, and **
 history** into a retrieval-augmented answer that always says *where every claim came from* —
 and refuses to answer when it cannot.
 
-> **Status: Phase 1 — Infrastructure Foundation complete.**
-> All three services start, report real dependency health, and are covered by tests.
-> **No product feature is implemented yet** — no auth, no upload, no PDF processing, no
-> embeddings, no RAG, no chat. Do not assume a feature exists; the home page reads its
-> capability table live from the backend, and every flag is `false`.
+> **Status: Phase 2 — Backend Foundation complete.**
+> Authentication, role-based authorization, the full data layer, and CRUD for every
+> domain entity are implemented and tested (149 backend tests).
+> **Nothing AI-related exists yet** — no manual upload, no PDF processing, no OCR, no
+> embeddings, no Qdrant collections, no RAG, no LLM calls, no chat answers. Do not assume
+> a feature exists; the home page reads its capability table live from the backend, and
+> every document/AI flag is still `false`.
 
 ---
 
@@ -119,8 +121,16 @@ Full instructions, including Ollama setup and OS-specific notes:
 | Structured logging with request correlation IDs | ✅ |
 | Config validation that refuses placeholder secrets | ✅ |
 | Docker Compose stack with healthchecks and named volumes | ✅ |
-| 104 automated tests | ✅ |
-| Anything AI-related | ❌ Phase 3+ |
+| Email + password auth, refresh tokens, lockout | ✅ Phase 2 |
+| RBAC over admin / manager / technician / viewer | ✅ Phase 2 |
+| 11 MongoDB collections with 51 indexes | ✅ Phase 2 |
+| CRUD: machine models, machines, manuals (metadata), incidents, maintenance | ✅ Phase 2 |
+| Incident resolution requiring explicit human confirmation | ✅ Phase 2 |
+| Audit logging on every state change | ✅ Phase 2 |
+| 211 automated tests (149 backend, 47 FastAPI, 15 frontend) | ✅ |
+| Manual upload / PDF processing / OCR | ❌ Phase 3 |
+| Embeddings, Qdrant, vector search | ❌ Phase 4 |
+| RAG answers, troubleshooting chat | ❌ Phase 5 |
 
 The **Service status** page shows the true state of every dependency, including
 failures — nothing is hardcoded to "healthy".
@@ -210,9 +220,39 @@ failures — nothing is hardcoded to "healthy".
 | [`docs/SERVICE_CONTRACTS.md`](docs/SERVICE_CONTRACTS.md) | Every endpoint with real responses |
 | [`docs/TROUBLESHOOTING_LOCAL_SETUP.md`](docs/TROUBLESHOOTING_LOCAL_SETUP.md) | Symptom-to-fix guide |
 
+## Phase 2 documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/PHASE_2_IMPLEMENTATION.md`](docs/PHASE_2_IMPLEMENTATION.md) | What was built, decisions, files, known gaps |
+| [`docs/DATABASE_SCHEMA.md`](docs/DATABASE_SCHEMA.md) | 11 collections, every index and its justification |
+| [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md) | All 30 endpoints, envelopes, error codes |
+| [`docs/AUTHENTICATION_AND_AUTHORIZATION.md`](docs/AUTHENTICATION_AND_AUTHORIZATION.md) | Token design, auth flow, the RBAC matrix |
+| [`docs/SECURITY_NOTES.md`](docs/SECURITY_NOTES.md) | What is protected, and what is **not** |
+| [`docs/TESTING.md`](docs/TESTING.md) | Test inventory and manual verification steps |
+
+---
+
+## Creating the first administrator
+
+There are **no default credentials anywhere in this repository.** Set all three
+variables in `.env`, then run the setup command:
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL=you@example.com
+BOOTSTRAP_ADMIN_USERNAME=your-username
+BOOTSTRAP_ADMIN_PASSWORD=<a strong password, 12+ characters>
+
+npm run create-admin
+```
+
+It only acts on an empty database. Alternatively, the first account registered
+through `POST /auth/register` becomes the administrator. Either way the account is
+flagged `must_change_password`.
+
 ---
 
 ## Next step
 
-Phase 1 is complete and awaiting review. **Phase 2 (authentication and the data
-layer) will not start without explicit approval.**
+Phase 2 is complete and awaiting review. **Phase 3 (manual upload and document
+processing) will not start without explicit approval.**

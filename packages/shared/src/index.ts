@@ -187,7 +187,7 @@ export interface SystemFeatureFlags {
   maintenanceHistory: boolean;
 }
 
-/** Phase 1: nothing is implemented yet. Flipped on as phases land. */
+/** Phase 1 baseline: nothing implemented. Retained for reference/tests. */
 export const PHASE_1_FEATURES: SystemFeatureFlags = {
   authentication: false,
   manualUpload: false,
@@ -199,6 +199,174 @@ export const PHASE_1_FEATURES: SystemFeatureFlags = {
   incidentMemory: false,
   maintenanceHistory: false,
 };
+
+/**
+ * Phase 2: authentication and the data layer exist. Everything document- or
+ * AI-related is still absent. `/system/info` reports THIS object, so the UI can
+ * never claim a capability the backend does not have.
+ */
+export const PHASE_2_FEATURES: SystemFeatureFlags = {
+  authentication: true,
+  manualUpload: false,
+  documentProcessing: false,
+  ocr: false,
+  embeddings: false,
+  vectorSearch: false,
+  ragAnswers: false,
+  incidentMemory: false,
+  maintenanceHistory: false,
+};
+
+// ---------------------------------------------------------------------------
+// Roles and authorization (Phase 2)
+// ---------------------------------------------------------------------------
+
+/** Flat RBAC, one role per user. See docs/PRODUCT_REQUIREMENTS.md 13.2. */
+export const USER_ROLES = ['admin', 'manager', 'technician', 'viewer'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+/**
+ * Capabilities are the unit of authorization. Routes declare a capability;
+ * the policy map decides. Never scatter `if (role === 'admin')` in handlers.
+ */
+export const CAPABILITIES = [
+  'machine_model.read', 'machine_model.create', 'machine_model.update', 'machine_model.delete',
+  'machine.read', 'machine.create', 'machine.update', 'machine.delete',
+  'manual.read', 'manual.create', 'manual.update', 'manual.delete',
+  'incident.read', 'incident.create', 'incident.update_any', 'incident.update_own',
+  'incident.confirm_resolution', 'incident.reopen',
+  'incident_action.create', 'incident_action.read',
+  'maintenance.read', 'maintenance.create', 'maintenance.update_any', 'maintenance.update_own',
+  'conversation.create', 'conversation.read_own', 'conversation.read_any', 'conversation.update_own',
+  'user.read_self', 'user.update_self', 'user.read_all', 'user.create', 'user.update_role',
+  'audit_log.read',
+] as const;
+export type Capability = (typeof CAPABILITIES)[number];
+
+// ---------------------------------------------------------------------------
+// Domain enums (Phase 2) - mirrored by zod validators and Mongo validators
+// ---------------------------------------------------------------------------
+
+export const MACHINE_STATUSES = ['operational', 'down', 'maintenance', 'retired'] as const;
+export type MachineStatus = (typeof MACHINE_STATUSES)[number];
+
+export const CRITICALITY_LEVELS = ['low', 'medium', 'high', 'critical'] as const;
+export type Criticality = (typeof CRITICALITY_LEVELS)[number];
+
+export const MACHINE_TYPES = [
+  'cnc_lathe', 'cnc_mill', 'injection_moulder', 'hydraulic_press', 'conveyor',
+  'compressor', 'robot_arm', 'packaging', 'boiler', 'pump', 'other',
+] as const;
+export type MachineType = (typeof MACHINE_TYPES)[number];
+
+export const MANUAL_SCOPES = ['model', 'machine'] as const;
+export type ManualScope = (typeof MANUAL_SCOPES)[number];
+
+export const DOCUMENT_TYPES = [
+  'operation', 'maintenance', 'service', 'parts_catalog', 'electrical_schematic',
+  'troubleshooting', 'safety', 'installation', 'other',
+] as const;
+export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** Set by the processing pipeline (Phase 3+), never by a metadata endpoint. */
+export const PROCESSING_STATUSES = ['queued', 'processing', 'ready', 'failed', 'cancelled'] as const;
+export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number];
+
+export const JOB_TYPES = [
+  'full_process', 'reindex_full', 'reindex_embed', 'reindex_index', 'ocr_only', 'delete_vectors',
+] as const;
+export type JobType = (typeof JOB_TYPES)[number];
+
+export const JOB_STATUSES = [
+  'queued', 'running', 'completed', 'completed_with_warnings', 'failed', 'cancelled',
+] as const;
+export type JobStatus = (typeof JOB_STATUSES)[number];
+
+export const INCIDENT_STATUSES = ['open', 'in_progress', 'resolved', 'closed', 'cancelled'] as const;
+export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
+
+/**
+ * Resolution is a SEPARATE axis from workflow status, and only a human may set
+ * `resolved_confirmed`. See docs/DATA_MODEL.md 8, rules 1-2.
+ */
+export const RESOLUTION_STATUSES = [
+  'unresolved', 'resolved_confirmed', 'temporarily_resolved', 'recurring',
+] as const;
+export type ResolutionStatus = (typeof RESOLUTION_STATUSES)[number];
+
+export const SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type Severity = (typeof SEVERITIES)[number];
+
+export const ACTION_OUTCOMES = ['worked', 'partial', 'no_change', 'made_worse', 'unknown'] as const;
+export type ActionOutcome = (typeof ACTION_OUTCOMES)[number];
+
+export const ACTION_TYPES = [
+  'inspection', 'adjustment', 'cleaning', 'part_replacement', 'reset',
+  'software_change', 'calibration', 'escalation', 'other',
+] as const;
+export type ActionType = (typeof ACTION_TYPES)[number];
+
+export const MAINTENANCE_TYPES = [
+  'preventive', 'corrective', 'calibration', 'inspection', 'part_replacement',
+  'software_update', 'cleaning', 'lubrication', 'overhaul',
+] as const;
+export type MaintenanceType = (typeof MAINTENANCE_TYPES)[number];
+
+export const CONVERSATION_STATUSES = ['active', 'archived'] as const;
+export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
+
+export const MESSAGE_ROLES = ['user', 'assistant', 'system'] as const;
+export type MessageRole = (typeof MESSAGE_ROLES)[number];
+
+// ---------------------------------------------------------------------------
+// Pagination (Phase 2)
+// ---------------------------------------------------------------------------
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+/** Paginated list responses add `pagination` alongside `data`. */
+export interface ApiPaginatedSuccess<T> extends ApiSuccess<T[]> {
+  pagination: PaginationMeta;
+}
+
+export const PAGINATION_DEFAULT_PAGE = 1;
+export const PAGINATION_DEFAULT_LIMIT = 20;
+/** Hard ceiling: an unbounded list endpoint is a denial-of-service vector. */
+export const PAGINATION_MAX_LIMIT = 100;
+
+// ---------------------------------------------------------------------------
+// Auth wire shapes (Phase 2)
+// ---------------------------------------------------------------------------
+
+/** The safe user projection. `password_hash` can never appear here. */
+export interface PublicUser {
+  id: string;
+  username: string;
+  email: string;
+  fullName: string;
+  role: UserRole;
+  isActive: boolean;
+  mustChangePassword: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  /** Seconds until the access token expires. */
+  expiresIn: number;
+  tokenType: 'Bearer';
+}
+
+export interface LoginResponse extends AuthTokens {
+  user: PublicUser;
+}
 
 // ---------------------------------------------------------------------------
 // Type guards

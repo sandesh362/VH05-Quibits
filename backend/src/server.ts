@@ -11,7 +11,8 @@ import path from 'node:path';
 import { ConfigValidationError, getConfig, redactUri, type AppConfig } from './config/env.js';
 import { getLogger } from './core/logger.js';
 import { createApp } from './app.js';
-import { connectMongoSafely, disconnectMongo } from './db/mongo.js';
+import { connectMongoSafely, disconnectMongo, getDb } from './db/mongo.js';
+import { prepareDatabase } from './database/bootstrap.js';
 
 /** Grace period for in-flight requests before the socket is forced closed. */
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -115,7 +116,29 @@ async function main(): Promise<void> {
   await ensureStorageDirectories(config);
 
   // --- 3. MongoDB (non-fatal: readiness reports the outage) ----------------
-  await connectMongoSafely();
+  const mongoConnected = await connectMongoSafely();
+
+  /**
+   * Indexes and the optional bootstrap admin, once per boot.
+   *
+   * Also non-fatal. A slow or briefly unavailable database should degrade
+   * readiness, not prevent the process from starting - the same policy the
+   * connection itself follows. Index creation is idempotent, so the next
+   * successful boot repairs anything missed here.
+   */
+  if (mongoConnected) {
+    const db = getDb();
+    if (db) {
+      try {
+        await prepareDatabase(db);
+      } catch (error) {
+        log.error(
+          { err: error instanceof Error ? error.message : String(error) },
+          'Database preparation failed - indexes may be missing',
+        );
+      }
+    }
+  }
 
   // --- 4. Listen -----------------------------------------------------------
   const app = createApp();

@@ -91,6 +91,20 @@ export async function connectMongoSafely(): Promise<boolean> {
   }
 }
 
+/**
+ * TEST-ONLY: point the singleton at an externally managed database.
+ *
+ * Integration tests run a real mongod via mongodb-memory-server and need the
+ * application code - which resolves its handle through `getDb()` - to use it.
+ * Guarded so it can never take effect in a running deployment.
+ */
+export function setDbForTests(nextDb: Db | null): void {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('setDbForTests() is only available when NODE_ENV=test.');
+  }
+  db = nextDb;
+}
+
 export async function disconnectMongo(): Promise<void> {
   if (!client) return;
   try {

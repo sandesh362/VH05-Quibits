@@ -96,17 +96,36 @@ describe('GET /api/v1/system/info', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.service).toBe('backend');
-    expect(res.body.data.phase).toContain('Phase 1');
+    expect(res.body.data.phase).toContain('Phase 2');
     expect(res.body.data.apiPrefix).toBe(PREFIX);
   });
 
-  it('reports every domain feature as unimplemented', async () => {
+  it('reports authentication as available and every AI feature as unimplemented', async () => {
     const res = await request(app).get(`${PREFIX}/system/info`);
     const features = res.body.data.features;
 
-    // Guards against a future phase silently shipping a half-built feature flag.
-    for (const [name, enabled] of Object.entries(features)) {
-      expect(enabled, `feature "${name}" must be false in Phase 1`).toBe(false);
+    // Phase 2 delivers exactly one of these: authentication.
+    expect(features.authentication).toBe(true);
+
+    /**
+     * Everything document- or AI-related must still report false. This is the
+     * guard that stops a future phase from flipping a flag before the
+     * capability behind it actually exists - the UI reads these flags to decide
+     * what to offer, so a premature `true` becomes a user-visible lie.
+     */
+    const mustRemainFalse = [
+      'manualUpload',
+      'documentProcessing',
+      'ocr',
+      'embeddings',
+      'vectorSearch',
+      'ragAnswers',
+      'incidentMemory',
+      'maintenanceHistory',
+    ];
+
+    for (const name of mustRemainFalse) {
+      expect(features[name], `feature "${name}" must be false in Phase 2`).toBe(false);
     }
   });
 

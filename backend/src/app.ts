@@ -13,6 +13,13 @@ import { requestLogging } from './middleware/request-logging.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { healthRoutes } from './modules/health/health.routes.js';
 import { systemRoutes } from './modules/system/system.routes.js';
+import { authRoutes, userRoutes } from './modules/auth/auth.routes.js';
+import { machineModelRoutes } from './modules/machine-models/machine-models.routes.js';
+import { machineRoutes } from './modules/machines/machines.routes.js';
+import { manualRoutes } from './modules/manuals/manuals.routes.js';
+import { incidentRoutes } from './modules/incidents/incidents.routes.js';
+import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
+import { conversationRoutes } from './modules/conversations/conversations.routes.js';
 
 export function createApp(): Express {
   const config = getConfig();
@@ -61,8 +68,22 @@ export function createApp(): Express {
 
   // --- Routes ---------------------------------------------------------------
   const api = express.Router();
+
+  // Unauthenticated operational endpoints.
   api.use(healthRoutes());
   api.use(systemRoutes());
+
+  // Phase 2 domain routers. Each mounts its own authenticate()/authorize()
+  // chain, so there is no app-wide auth middleware to accidentally bypass.
+  api.use(authRoutes());
+  api.use(userRoutes());
+  api.use(machineModelRoutes());
+  api.use(machineRoutes());
+  api.use(manualRoutes());
+  api.use(incidentRoutes());
+  api.use(maintenanceRoutes());
+  api.use(conversationRoutes());
+
   app.use(config.apiPrefix, api);
 
   // Unversioned liveness alias for container healthchecks, so the healthcheck

@@ -106,11 +106,40 @@ const envSchema = z
     // Storage
     STORAGE_ROOT: z.string().default('./storage'),
 
-    // Security placeholders (no auth logic exists in Phase 1)
+    // Authentication (Phase 2 - now actively used)
     JWT_SECRET: secretSchema('JWT_SECRET'),
     JWT_EXPIRATION: z.string().default('15m'),
     JWT_REFRESH_SECRET: secretSchema('JWT_REFRESH_SECRET'),
     JWT_REFRESH_EXPIRATION: z.string().default('7d'),
+    JWT_ISSUER: z.string().default('itp-api'),
+    JWT_AUDIENCE: z.string().default('itp-web'),
+
+    /**
+     * Account lockout. Slows credential stuffing without a shared cache: the
+     * counter lives on the user document, which is correct for a single-node
+     * deployment.
+     */
+    AUTH_MAX_FAILED_LOGINS: z.coerce.number().int().min(3).max(50).default(10),
+    AUTH_LOCKOUT_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
+    /** Requests per window per IP against /auth/login and /auth/register. */
+    AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1000).default(20),
+    AUTH_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().min(1).max(120).default(15),
+
+    /**
+     * Who may set an incident to resolved_confirmed.
+     *   self       - the technician who worked it (Phase 0 13.4 option A, default)
+     *   supervisor - manager/admin only (option B)
+     */
+    INCIDENT_CONFIRMATION_MODE: z.enum(['self', 'supervisor']).default('self'),
+
+    /**
+     * Optional bootstrap administrator, applied at startup only when the users
+     * collection is EMPTY. Credentials come from the environment - never from
+     * source. Leaving these unset is supported: use `npm run create-admin`.
+     */
+    BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
+    BOOTSTRAP_ADMIN_USERNAME: z.string().min(3).max(32).optional(),
+    BOOTSTRAP_ADMIN_PASSWORD: z.string().optional(),
 
     // Testing escape hatch: skip dependency probes in unit tests
     DISABLE_DEPENDENCY_CHECKS: booleanish,
@@ -122,6 +151,43 @@ const envSchema = z
         path: ['JWT_REFRESH_SECRET'],
         message: 'JWT_REFRESH_SECRET must differ from JWT_SECRET',
       });
+    }
+
+    // Bootstrap admin is all-or-nothing: a half-configured admin would fail at
+    // startup in a confusing way, or worse, create an account with a guessable
+    // generated password.
+    const bootstrapParts = [
+      env.BOOTSTRAP_ADMIN_EMAIL,
+      env.BOOTSTRAP_ADMIN_USERNAME,
+      env.BOOTSTRAP_ADMIN_PASSWORD,
+    ];
+    const providedCount = bootstrapParts.filter((v) => v !== undefined && v !== '').length;
+
+    if (providedCount > 0 && providedCount < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BOOTSTRAP_ADMIN_EMAIL'],
+        message:
+          'BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_USERNAME and BOOTSTRAP_ADMIN_PASSWORD must all be set together, or all be left unset.',
+      });
+    }
+
+    if (env.BOOTSTRAP_ADMIN_PASSWORD !== undefined && env.BOOTSTRAP_ADMIN_PASSWORD !== '') {
+      const pw = env.BOOTSTRAP_ADMIN_PASSWORD;
+      if (pw.length < 12) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['BOOTSTRAP_ADMIN_PASSWORD'],
+          message: 'BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters.',
+        });
+      }
+      if (/change_me|changeme|password|admin123|placeholder/i.test(pw)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['BOOTSTRAP_ADMIN_PASSWORD'],
+          message: 'BOOTSTRAP_ADMIN_PASSWORD looks like a placeholder. Choose a real password.',
+        });
+      }
     }
   });
 
@@ -161,7 +227,19 @@ export interface AppConfig {
     readonly expiration: string;
     readonly refreshSecret: string;
     readonly refreshExpiration: string;
+    readonly issuer: string;
+    readonly audience: string;
   };
+  readonly auth: {
+    readonly maxFailedLogins: number;
+    readonly lockoutMinutes: number;
+    readonly rateLimitMax: number;
+    readonly rateLimitWindowMinutes: number;
+  };
+  readonly incidentConfirmationMode: 'self' | 'supervisor';
+  readonly bootstrapAdmin:
+    | { readonly email: string; readonly username: string; readonly password: string }
+    | null;
   readonly disableDependencyChecks: boolean;
 }
 
@@ -235,7 +313,24 @@ export function parseConfig(source: NodeJS.ProcessEnv = process.env): AppConfig 
       expiration: env.JWT_EXPIRATION,
       refreshSecret: env.JWT_REFRESH_SECRET,
       refreshExpiration: env.JWT_REFRESH_EXPIRATION,
+      issuer: env.JWT_ISSUER,
+      audience: env.JWT_AUDIENCE,
     },
+    auth: {
+      maxFailedLogins: env.AUTH_MAX_FAILED_LOGINS,
+      lockoutMinutes: env.AUTH_LOCKOUT_MINUTES,
+      rateLimitMax: env.AUTH_RATE_LIMIT_MAX,
+      rateLimitWindowMinutes: env.AUTH_RATE_LIMIT_WINDOW_MINUTES,
+    },
+    incidentConfirmationMode: env.INCIDENT_CONFIRMATION_MODE,
+    bootstrapAdmin:
+      env.BOOTSTRAP_ADMIN_EMAIL && env.BOOTSTRAP_ADMIN_USERNAME && env.BOOTSTRAP_ADMIN_PASSWORD
+        ? {
+            email: env.BOOTSTRAP_ADMIN_EMAIL,
+            username: env.BOOTSTRAP_ADMIN_USERNAME,
+            password: env.BOOTSTRAP_ADMIN_PASSWORD,
+          }
+        : null,
     disableDependencyChecks: env.DISABLE_DEPENDENCY_CHECKS,
   });
 }
