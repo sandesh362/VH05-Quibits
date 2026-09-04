@@ -3,7 +3,8 @@
  * visible and non-dismissible, regardless of auth state.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppLayout } from './app-layout';
 import { AuthProvider } from '../lib/auth';
@@ -33,7 +34,7 @@ describe('AppLayout', () => {
     expect(disclaimer).toHaveTextContent(/never proves a diagnosis/i);
   });
 
-  it('keeps the disclaimer visible when signed in', () => {
+  it('keeps the disclaimer visible when signed in', async () => {
     sessionStorage.setItem('itp.accessToken', 'token');
     sessionStorage.setItem(
       'itp.user',
@@ -52,7 +53,9 @@ describe('AppLayout', () => {
     );
     renderLayout();
     expect(screen.getByTestId('safety-disclaimer')).toBeInTheDocument();
-    expect(screen.getByText(/Sign out/i)).toBeInTheDocument();
+    // The user menu holds the sign-out action; open it and confirm the item.
+    await userEvent.click(screen.getByRole('button', { name: /account|tech/i }));
+    await waitFor(() => expect(screen.getByRole('menuitem', { name: /sign out/i })).toBeInTheDocument());
   });
 
   it('does not offer a dismiss control for the disclaimer', () => {

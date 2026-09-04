@@ -469,3 +469,161 @@
   display: flex;
   gap: var(--space-sm);
 }
+
+/* --- Phase 9: dashboard -------------------------------------------------- */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--space-md);
+}
+.dashboard-card { min-width: 0; }
+.dashboard-card--wide { grid-column: 1 / -1; }
+
+.dash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+.dash-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+.dash-list__item:last-child { border-bottom: none; }
+.dash-list__date {
+  font-size: 0.78rem;
+  color: var(--color-text-subtle);
+  min-width: 88px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-list__text { min-width: 0; word-break: break-word; }
+
+/* --- Detail pages: entity header ----------------------------------------- */
+.entity-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.entity-header__badges {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+}
+.entity-header__meta {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+/* --- Chat composition: assistant vs technician evidence ------------------ */
+.evidence-card {
+  border-radius: var(--radius);
+  padding: var(--space-md);
+  margin-top: var(--space-sm);
+}
+.evidence-card--manual {
+  background: var(--color-info-bg);
+  border: 1px solid rgba(88,166,255,0.35);
+}
+.evidence-card--history {
+  background: var(--color-warn-bg);
+  border: 1px solid rgba(210,153,34,0.4);
+}
+.evidence-card--action {
+  background: var(--color-ok-bg);
+  border: 1px solid rgba(63,185,80,0.35);
+}
+.evidence-card__title {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+/* Upload progress */
+.upload-dropzone {
+  border: 2px dashed var(--color-border-strong);
+  border-radius: var(--radius);
+  padding: var(--space-xl) var(--space-md);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.upload-dropzone:hover,
+.upload-dropzone--active {
+  border-color: var(--color-info);
+  background: var(--color-info-bg);
+}
+.upload-dropzone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.upload-dropzone__inner { position: relative; }
+
+/* --- Auth / status pages (centered) -------------------------------------- */
+.page--centered {
+  max-width: 460px;
+  margin: 0 auto;
+  padding-top: var(--space-xl);
+}
+.page__header--centered { text-align: center; }
+.login-form { gap: var(--space-md); }
+.login-form__submit { width: 100%; margin-top: var(--space-sm); }
+
+.status-page {
+  max-width: 640px;
+  margin: var(--space-xl) auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  align-items: center;
+}
+.status-page__icon { font-size: 3rem; }
+.status-page--error .status-page__icon { color: var(--color-error); }
+.status-page--warn .status-page__icon { color: var(--color-warn); }
+
+/* --- Vertical activity timeline (machine detail, evidence) --------------- */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+.timeline__item {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-md);
+  position: relative;
+}
+.timeline__item:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: 18px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--color-border);
+}
+.timeline__dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-top: 4px;
+  border: 2px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  z-index: 1;
+  justify-self: center;
+}
+.timeline__dot--maintenance { border-color: var(--color-info); background: var(--color-info-bg); }
+.timeline__dot--incident { border-color: var(--color-warn); background: var(--color-warn-bg); }
+.timeline__title { margin: 0; font-size: 0.92rem; }
+.timeline__meta { margin: 2px 0 0; font-size: 0.78rem; color: var(--color-text-subtle); }
+.timeline__note { margin: 4px 0 0; font-size: 0.85rem; color: var(--color-text-muted); }

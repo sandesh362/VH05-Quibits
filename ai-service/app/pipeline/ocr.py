@@ -132,7 +132,23 @@ def ocr_pages(
     A page-level failure does not kill the whole job: the page is recorded with
     empty text and a low-confidence marker, and processing continues. This is
     preferable to losing the whole manual over one bad page.
+
+    However, if Tesseract itself is missing, the job must fail loudly with an
+    actionable message rather than silently producing empty pages that will
+    later fail at the chunking stage with a generic "No meaningful text"
+    error.  We detect the missing-binary case up-front and raise.
     """
+    if pages and not tesseract_available():
+        raise ServiceError(
+            "SERVICE_UNAVAILABLE",
+            (
+                "OCR is required for this PDF (it appears to be scanned or has "
+                "image-only pages) but Tesseract is not installed. "
+                "Install it (apt-get install tesseract-ocr) or re-upload with "
+                "OCR disabled for text-based manuals only."
+            ),
+        )
+
     results: dict[int, OcrPageResult] = {}
     for page_number in pages:
         try:
