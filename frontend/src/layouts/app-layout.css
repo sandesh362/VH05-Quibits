@@ -117,3 +117,22 @@
     text-align: center;
   }
 }
+
+/* --- Phase 8: persistent safety disclaimer --------------------------------- */
+.safety-disclaimer {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-warn);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--color-warn-bg, #fff4e0);
+  color: var(--color-warn-dark, #7a4a00);
+  font-size: 0.8rem;
+  text-align: left;
+}
+
+.safety-disclaimer strong {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

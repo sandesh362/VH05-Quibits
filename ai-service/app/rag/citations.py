@@ -16,7 +16,7 @@ from typing import Any
 from app.rag.types import CitationReport, RetrievalHit, SourceRef
 
 _JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE)
-_SOURCE_ID = re.compile(r"\bsource-(\d+)\b", re.IGNORECASE)
+_SOURCE_ID = re.compile(r"\b(source|history|maint)-(\d+)\b", re.IGNORECASE)
 _PAGE_MENTION = re.compile(
     r"\b(?:pp?\.?|pages?)\s*(\d+)(?:\s*[–-]\s*(\d+))?",
     re.IGNORECASE,
@@ -62,7 +62,7 @@ def extract_cited_ids(payload: dict[str, Any], answer_text: str) -> list[str]:
             if token:
                 ids.append(token)
     for match in _SOURCE_ID.finditer(answer_text or ""):
-        ids.append(f"source-{match.group(1)}")
+        ids.append(f"{match.group(1).lower()}-{match.group(2)}")
     seen: set[str] = set()
     out: list[str] = []
     for item in ids:

@@ -96,11 +96,11 @@ describe('GET /api/v1/system/info', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.service).toBe('backend');
-    expect(res.body.data.phase).toContain('Phase 5');
+    expect(res.body.data.phase).toContain('Phase 7');
     expect(res.body.data.apiPrefix).toBe(PREFIX);
   });
 
-  it('reports Phase 5 capability flags accurately', async () => {
+  it('reports Phase 6+ capability flags accurately', async () => {
     const res = await request(app).get(`${PREFIX}/system/info`);
     const features = res.body.data.features;
 
@@ -111,12 +111,9 @@ describe('GET /api/v1/system/info', () => {
     expect(features.embeddings).toBe(true);
     expect(features.vectorSearch).toBe(true);
     expect(features.ragAnswers).toBe(true);
-
-    /**
-     * Incident-memory retrieval is still Phase 6+. A premature `true` would
-     * claim a capability the backend does not have.
-     */
-    expect(features.incidentMemory).toBe(false);
+    expect(features.incidentManagement).toBe(true);
+    expect(features.incidentMemory).toBe(true);
+    expect(features.maintenanceHistory).toBe(true);
   });
 
   it('lists dependency names but never their URLs or credentials', async () => {

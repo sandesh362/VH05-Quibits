@@ -13,11 +13,14 @@
  */
 import type { Collection, Db, ObjectId } from 'mongodb';
 import type {
-  ActionOutcome,
-  ActionType,
+  ActionResultStatus,
   ConversationStatus,
   Criticality,
   DocumentType,
+  FixStatus,
+  IncidentActionSourceType,
+  IncidentEmbeddingStatus,
+  IncidentSource,
   IncidentStatus,
   IssueStatus,
   JobStatus,
@@ -29,8 +32,9 @@ import type {
   MessageRole,
   MessageStatus,
   MessageType,
+  Priority,
   ProcessingStatus,
-  ResolutionStatus,
+  RootCauseStatus,
   Severity,
   SuggestedActionStatus,
   TechnicianActionStatus,
@@ -78,6 +82,8 @@ export interface RefreshTokenEntry {
 
 export interface UserDoc extends BaseDoc, SoftDeletable {
   _id: ObjectId;
+  /** Org is derived at creation; legacy rows without it resolve to the default org. */
+  organization_id?: ObjectId | null;
   username: string;
   email: string;
   /**
@@ -105,6 +111,7 @@ export interface UserDoc extends BaseDoc, SoftDeletable {
 
 export interface MachineModelDoc extends BaseDoc, SoftDeletable, Attributed {
   _id: ObjectId;
+  organization_id?: ObjectId | null;
   manufacturer: string;
   model_name: string;
   machine_type: MachineType;
@@ -139,6 +146,7 @@ export interface ModelSnapshot {
 
 export interface MachineDoc extends BaseDoc, SoftDeletable, Attributed {
   _id: ObjectId;
+  organization_id?: ObjectId | null;
   /** Immutable after creation. */
   asset_tag: string;
   machine_model_id: ObjectId;
@@ -161,6 +169,7 @@ export interface MachineDoc extends BaseDoc, SoftDeletable, Attributed {
 
 export interface ManualDoc extends BaseDoc, SoftDeletable {
   _id: ObjectId;
+  organization_id?: ObjectId | null;
   title: string;
   description?: string | null;
   /** Display-only. May differ from the model's manufacturer (e.g. OEM vs brand). */
@@ -413,69 +422,144 @@ export interface ConversationActionDoc extends BaseDoc {
 }
 
 // ---------------------------------------------------------------------------
+// organizations  (single-tenant today, but incidents are org-scoped so a
+// future multi-tenant deployment does not require a data migration)
+// ---------------------------------------------------------------------------
+
+export interface OrganizationDoc extends BaseDoc {
+  _id: ObjectId;
+  name: string;
+  slug: string;
+  is_active: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // incidents
 // ---------------------------------------------------------------------------
 
-/** AI output recorded as a SUGGESTION. Never promoted into an action. */
-export interface AiSuggestion {
-  message_id?: ObjectId | null;
-  conversation_id?: ObjectId | null;
-  suggested_at: Date;
-  summary: string;
-  top_causes: string[];
-  confidence?: string | null;
-  generation_model?: string | null;
-  was_followed?: boolean | null;
+export interface IncidentTimelineEvent {
+  _id: ObjectId;
+  sequence: number;
+  /** Stable event type code, e.g. `status_changed`, `action_recorded`. */
+  type: string;
+  at: Date;
+  actor_id?: ObjectId | null;
+  actor_username?: string | null;
+  previous?: unknown;
+  next?: unknown;
+  note?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
-/** Corrections append here; prior values are preserved, never overwritten. */
-export interface IncidentRevision {
+export interface RootCauseHistoryEntry {
   at: Date;
   by: ObjectId;
-  reason: string;
-  changed_fields: string[];
-  previous_values: Record<string, unknown>;
+  by_username?: string | null;
+  from: RootCauseStatus;
+  to: RootCauseStatus;
+  note: string | null;
+  text?: string | null;
+}
+
+/**
+ * Root cause state. `confirmed` is reachable ONLY through the explicit
+ * confirm endpoint; `rejected` only through the reject endpoint. AI output can
+ * at most populate `suspected` via a conversation import, and even that is a
+ * technician act (PATCH root-cause).
+ */
+export interface IncidentRootCause {
+  text: string | null;
+  status: RootCauseStatus;
+  confirmation_note?: string | null;
+  confirmed_by?: ObjectId | null;
+  confirmed_at?: Date | null;
+  rejected_by?: ObjectId | null;
+  rejected_at?: Date | null;
+  rejection_reason?: string | null;
+  history: RootCauseHistoryEntry[];
+}
+
+export interface FixHistoryEntry {
+  at: Date;
+  by: ObjectId;
+  by_username?: string | null;
+  from: FixStatus | 'not_recorded';
+  to: FixStatus;
+  note: string | null;
+}
+
+/** A temporary or permanent fix. `confirmed` is a separate explicit act. */
+export interface IncidentFix {
+  description: string;
+  result?: string | null;
+  status: FixStatus;
+  recorded_by: ObjectId;
+  recorded_at: Date;
+  confirmed_by?: ObjectId | null;
+  confirmed_at?: Date | null;
+  notes?: string | null;
+  history: FixHistoryEntry[];
+}
+
+/** Metadata only - attachment bytes live on the local filesystem. */
+export interface IncidentAttachmentMeta {
+  id: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: ObjectId;
+  uploaded_at: Date;
 }
 
 export interface IncidentDoc extends BaseDoc, SoftDeletable, Attributed {
   _id: ObjectId;
   incident_number: string;
-  machine_id?: ObjectId | null;
-  machine_model_id: ObjectId;
-  /** True when unlinked to a machine. Such incidents are excluded from retrieval. */
-  needs_linking: boolean;
+  organization_id: ObjectId;
   title: string;
-  error_code?: string | null;
-  error_code_raw?: string | null;
-  symptom_text: string;
-  observed_at: Date;
+  description: string;
+  source: IncidentSource;
+  machine_id: ObjectId;
+  machine_model_id: ObjectId;
+  conversation_id?: ObjectId | null;
+  manual_id?: ObjectId | null;
+  manual_version?: string | null;
   reported_by: ObjectId;
   assigned_to?: ObjectId | null;
   severity: Severity;
-  downtime_minutes?: number | null;
+  priority: Priority;
   status: IncidentStatus;
-  resolution_status: ResolutionStatus;
-  /** Only an explicit human act sets this true. No timer, heuristic, or AI. */
-  resolution_confirmed: boolean;
-  confirmed_by?: ObjectId | null;
-  confirmed_at?: Date | null;
-  confirmation_method?: 'self' | 'supervisor' | null;
-  confirmation_note?: string | null;
-  verified_by_test?: boolean | null;
-  root_cause_text?: string | null;
-  effective_action_id?: ObjectId | null;
+  issue_status: IssueStatus;
+  symptoms: string[];
+  /** Normalised (`E041` form) error codes; raw display text is kept in symptoms/description. */
+  error_codes: string[];
+  operating_conditions: string[];
+  first_observed_at: Date;
+  last_observed_at?: Date | null;
+  root_cause: IncidentRootCause;
+  temporary_fix?: IncidentFix | null;
+  permanent_fix?: IncidentFix | null;
+  resolution_summary?: string | null;
+  resolved_by?: ObjectId | null;
   resolved_at?: Date | null;
-  ai_suggestions: AiSuggestion[];
-  conversation_ids: ObjectId[];
-  related_incident_ids: ObjectId[];
+  closed_by?: ObjectId | null;
+  closed_at?: Date | null;
+  reopened_by?: ObjectId | null;
+  reopened_at?: Date | null;
   tags: string[];
-  /** Phase 4+. Declared so the reconciler has a field to drive. */
-  vector_indexed: boolean;
-  revisions: IncidentRevision[];
+  attachments: IncidentAttachmentMeta[];
+  /** Server-built free text backing the structured search. */
+  search_text: string;
+  /** Mongo is authoritative for indexing state; Qdrant is a derived index. */
+  embedding_status: IncidentEmbeddingStatus;
+  qdrant_point_id?: string | null;
+  embedding_error?: string | null;
+  embedding_updated_at?: Date | null;
+  /** Append-only chronological record. Historical events are never overwritten. */
+  timeline: IncidentTimelineEvent[];
 }
 
 // ---------------------------------------------------------------------------
-// incident_actions  (append-only record of what a HUMAN did)
+// incident_actions  (technician work AND AI suggestions, never conflated)
 // ---------------------------------------------------------------------------
 
 export interface PartReplaced {
@@ -488,24 +572,30 @@ export interface PartReplaced {
 export interface IncidentActionDoc extends BaseDoc {
   _id: ObjectId;
   incident_id: ObjectId;
-  /** Denormalised for machine-level queries. Safe: the link is immutable. */
-  machine_id?: ObjectId | null;
-  sequence: number;
-  action_text: string;
-  action_type?: ActionType | null;
-  parts_replaced: PartReplaced[];
-  tools_used: string[];
-  outcome: ActionOutcome;
-  outcome_note?: string | null;
-  duration_minutes?: number | null;
-  performed_by: ObjectId;
+  /** Denormalised for org-scoped queries. Immutable once set. */
+  organization_id: ObjectId;
+  /**
+   * `technician` = a human did it; `assistant_suggestion` = the AI suggested
+   * it (NOT an action, and can never become confirmed); `manual` = copied
+   * from a manual; `other`.
+   */
+  action_type: IncidentActionSourceType;
+  description: string;
+  performed_by?: ObjectId | null;
+  source_message_id?: ObjectId | null;
+  source_suggestion_id?: string | null;
+  source_manual_id?: ObjectId | null;
+  source_manual_version?: string | null;
+  result?: string | null;
+  result_status: ActionResultStatus;
+  /** Only an explicit human confirmation sets this. AI can never confirm. */
+  confirmed: boolean;
+  confirmed_by?: ObjectId | null;
+  confirmed_at?: Date | null;
+  notes?: string | null;
   performed_at: Date;
-  followed_ai_suggestion?: boolean | null;
-  deviation_reason?: string | null;
-  /** Constant `technician_action`, so it can never be confused with AI content. */
-  source_type: 'technician_action';
   edited: boolean;
-  edit_history: { at: Date; by: ObjectId; previous_text: string }[];
+  edit_history: { at: Date; by: ObjectId; previous_description: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -521,6 +611,7 @@ export interface MaintenanceMeasurement {
 
 export interface MaintenanceRecordDoc extends BaseDoc, SoftDeletable, Attributed {
   _id: ObjectId;
+  organization_id: ObjectId;
   machine_id: ObjectId;
   machine_model_id: ObjectId;
   maintenance_type: MaintenanceType;
@@ -569,6 +660,7 @@ export interface AuditLogDoc {
 // ---------------------------------------------------------------------------
 
 export const COLLECTIONS = {
+  organizations: 'organizations',
   users: 'users',
   machineModels: 'machine_models',
   machines: 'machines',
@@ -586,6 +678,8 @@ export const COLLECTIONS = {
 } as const;
 
 export const collections = {
+  organizations: (db: Db): Collection<OrganizationDoc> =>
+    db.collection<OrganizationDoc>(COLLECTIONS.organizations),
   users: (db: Db): Collection<UserDoc> => db.collection<UserDoc>(COLLECTIONS.users),
   machineModels: (db: Db): Collection<MachineModelDoc> =>
     db.collection<MachineModelDoc>(COLLECTIONS.machineModels),

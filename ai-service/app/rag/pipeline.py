@@ -53,6 +53,9 @@ from app.rag.types import (
     ChunkStore,
     Embedder,
     ExtractedQuery,
+    HistoricalIncidentHit,
+    IncidentStore,
+    IncidentVectorIndex,
     RagAnswer,
     RagRuntimeConfig,
     RetrievalHit,
@@ -75,6 +78,10 @@ class PipelineRequest:
     include_inactive: bool = False
     conversation_id: str | None = None
     conversation_context: dict[str, Any] | None = None
+    organization_id: str | None = None
+    # Phase 7 maintenance lane: bounded, org-scoped facts supplied by Express.
+    maintenance_context: Any = None
+    query_at: str | None = None
     debug: bool = False
     top_k: int | None = None
 
@@ -88,6 +95,12 @@ class PipelineDeps:
     config: RagRuntimeConfig
     embedding_model: str
     warnings: list[str] = field(default_factory=list)
+    # Phase 6 incident memory (supplementary evidence only).
+    incident_store: IncidentStore | None = None
+    incident_vectors: IncidentVectorIndex | None = None
+    incident_memory_enabled: bool = False
+    incident_top_k: int = 4
+    incident_max_context_chars: int = 2_500
 
 
 @dataclass
@@ -103,6 +116,13 @@ class RetrievalTrace:
     semantic_available: bool
     duration_ms: int
     manuals_in_scope: int
+    historical: list[HistoricalIncidentHit] = field(default_factory=list)
+
+
+async def _embed_query_sync(deps: PipelineDeps, text: str) -> list[float]:
+    if deps.embedder is None:
+        raise ServiceError("SERVICE_UNAVAILABLE", "Embedding unavailable.")
+    return await deps.embedder.embed_query(text)
 
 
 def _scope_from_request(req: PipelineRequest) -> ScopeFilter:
@@ -288,6 +308,46 @@ async def retrieve(
     if req.top_k:
         ranked = ranked[: max(req.top_k, deps.config.top_k)]
 
+    # --- Phase 6: historical incident evidence (SUPPLEMENTARY) -------------
+    # Only when the caller's organization is known and the query is scoped to
+    # a machine or model. Organization filtering is enforced inside the
+    # incident store/vector index - never delegated to the request.
+    historical: list[HistoricalIncidentHit] = []
+    if (
+        deps.incident_memory_enabled
+        and req.organization_id
+        and (scope.machine_model_id or scope.machine_id)
+    ):
+        try:
+            from app.incident_memory.similar import retrieve_similar_incidents
+
+            historical, history_warnings = await retrieve_similar_incidents(
+                store=deps.incident_store,
+                vectors=deps.incident_vectors,
+                embed_query=(
+                    (lambda text: _embed_query_sync(deps, text))
+                    if deps.embedder is not None
+                    else None
+                ),
+                query={
+                    "title": extracted.original[:200],
+                    "machine_id": scope.machine_id,
+                    "machine_model_id": scope.machine_model_id,
+                    "error_codes": extracted.error_codes,
+                    "symptoms": extracted.symptoms,
+                    "operating_conditions": extracted.operating_conditions,
+                },
+                organization_id=req.organization_id,
+                machine_model_id=scope.machine_model_id,
+                exclude_incident_id="",
+                limit=deps.incident_top_k,
+                embedding_model=deps.embedding_model,
+            )
+            warnings.extend(history_warnings)
+        except Exception as exc:  # noqa: BLE001 - history is supplementary
+            warnings.append(f"historical incident retrieval failed: {str(exc)[:120]}")
+            historical = []
+
     return RetrievalTrace(
         extracted=extracted,
         scope=scope,
@@ -300,6 +360,7 @@ async def retrieve(
         semantic_available=semantic_available,
         duration_ms=int((time.perf_counter() - started) * 1000),
         manuals_in_scope=manuals_in_scope,
+        historical=historical,
     )
 
 
@@ -320,6 +381,7 @@ def _debug_payload(
         "manuals_in_scope": trace.manuals_in_scope,
         "exact_results": [h.to_public_dict() for h in trace.exact[:20]],
         "semantic_results": [h.to_public_dict() for h in trace.semantic[:20]],
+        "historical_results": [h.to_public_dict() for h in trace.historical[:10]],
         "ranking_scores": [
             {
                 "chunk_id": h.chunk_id,
@@ -510,12 +572,82 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
     if len(evidence_block) > deps.config.max_prompt_chars:
         evidence_block = clip_text_at_boundary(evidence_block, deps.config.max_prompt_chars)
 
+    # --- Historical incident evidence: clearly labeled, supplementary only ---
+    from app.rag.context import format_historical_evidence_block
+    from app.rag.types import SourceRef as IncidentSourceRef
+
+    historical_block = ""
+    historical_source_refs: list[Any] = []
+    for index, hit in enumerate(trace.historical, start=1):
+        incident = hit.incident
+        ref = IncidentSourceRef(
+            source_id=f"history-{index}",
+            chunk_id=incident.incident_id,
+            manual_id="",
+            manual_title=f"INCIDENT {incident.incident_number}",
+            manual_version=None,
+            page_start=0,
+            page_end=0,
+            section_title=None,
+            machine_model_id=incident.machine_model_id,
+            excerpt=None,
+            source_type="incident",
+            incident_number=incident.incident_number,
+            incident_resolved_at=incident.resolved_at,
+        )
+        historical_source_refs.append(ref)
+    if trace.historical:
+        historical_block = format_historical_evidence_block(
+            trace.historical, max_chars=deps.incident_max_context_chars
+        )
+
+    # --- Phase 7 maintenance lane: separate evidence class, never manual ---
+    from app.rag.maintenance import (
+        build_maintenance_evidence,
+        build_maintenance_source_refs,
+        format_maintenance_context_block,
+    )
+
+    maintenance_evidence = (
+        build_maintenance_evidence(
+            req.maintenance_context, req.query_at, extracted.original, selected
+        )
+        if req.maintenance_context
+        else []
+    )
+    maintenance_block = (
+        format_maintenance_context_block(maintenance_evidence, max_chars=1_500)
+        if maintenance_evidence
+        else ""
+    )
+    maintenance_source_refs = build_maintenance_source_refs(maintenance_evidence)
+
+    all_source_refs = [
+        *source_refs,
+        *historical_source_refs,
+        *maintenance_source_refs,
+    ]
+    precedence_notes = list(decision.conflicts)
+    if trace.historical:
+        precedence_notes.append(
+            "Manual evidence is authoritative. Historical incident notes are "
+            "supplementary context that may be machine-specific; they must "
+            "never override manual instructions."
+        )
+    if maintenance_evidence:
+        precedence_notes.append(
+            "Maintenance history is NON-CAUSAL context. It can never confirm a "
+            "root cause or fix, and it never appears as manual evidence."
+        )
+
     messages = build_messages(
         extracted=extracted,
         scope=scope,
         evidence_block=evidence_block,
-        allowed_source_ids=[s.source_id for s in source_refs],
-        conflict_notes=decision.conflicts,
+        historical_evidence_block=historical_block,
+        maintenance_block=maintenance_block,
+        allowed_source_ids=[s.source_id for s in all_source_refs],
+        conflict_notes=precedence_notes,
         conversation_context=req.conversation_context,
     )
     prompt_meta = {
@@ -535,7 +667,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
             reason=OLLAMA_UNAVAILABLE,
             message=REFUSAL_MESSAGES[OLLAMA_UNAVAILABLE],
             warnings=[*trace.warnings, *decision.warnings],
-            sources=[s.to_dict() for s in source_refs],
+            sources=[s.to_dict() for s in all_source_refs],
             retrieval=_retrieval_public(
                 len(trace.exact), len(trace.semantic), len(selected)
             ),
@@ -559,7 +691,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
             reason=OLLAMA_UNAVAILABLE,
             message=exc.message,
             warnings=[*trace.warnings, *decision.warnings],
-            sources=[s.to_dict() for s in source_refs],
+            sources=[s.to_dict() for s in all_source_refs],
             retrieval=_retrieval_public(
                 len(trace.exact), len(trace.semantic), len(selected)
             ),
@@ -573,7 +705,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
             reason=OLLAMA_UNAVAILABLE,
             message=str(exc)[:200],
             warnings=[*trace.warnings, *decision.warnings],
-            sources=[s.to_dict() for s in source_refs],
+            sources=[s.to_dict() for s in all_source_refs],
             retrieval=_retrieval_public(
                 len(trace.exact), len(trace.semantic), len(selected)
             ),
@@ -631,9 +763,9 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
             debug=_debug_payload(req, trace, prompt_meta=prompt_meta) or None,
         )
 
-    draft = format_answer_from_structured(parsed, [s.citation_label() for s in source_refs])
+    draft = format_answer_from_structured(parsed, [s.citation_label() for s in all_source_refs])
     cleaned_payload, cleaned_text, report = validate_citations(
-        parsed, draft, source_refs, selected
+        parsed, draft, all_source_refs, selected
     )
     if not report.valid:
         try:
@@ -650,10 +782,10 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
             regenerated = True
             if parsed_retry is not None:
                 draft = format_answer_from_structured(
-                    parsed_retry, [s.citation_label() for s in source_refs]
+                    parsed_retry, [s.citation_label() for s in all_source_refs]
                 )
                 cleaned_payload, cleaned_text, report = validate_citations(
-                    parsed_retry, draft, source_refs, selected
+                    parsed_retry, draft, all_source_refs, selected
                 )
                 report.regenerated = True
         except Exception:  # noqa: BLE001
@@ -686,8 +818,16 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
             or None,
         )
 
-    cited = sources_for_ids(cleaned_payload.get("cited_source_ids") or [], source_refs)
-    labels = [s.citation_label() for s in cited]
+    cited = sources_for_ids(cleaned_payload.get("cited_source_ids") or [], all_source_refs)
+    # Maintenance facts belong to the machine, not to the model's claims: show
+    # the lane even when the answer does not cite it.
+    final_sources = [*cited]
+    seen_ids = {ref.source_id for ref in cited}
+    for ref in maintenance_source_refs:
+        if ref.source_id not in seen_ids:
+            final_sources.append(ref)
+            seen_ids.add(ref.source_id)
+    labels = [s.citation_label() for s in final_sources]
     suggested_actions: list[dict[str, Any]] = []
     checks = [str(c).strip() for c in (cleaned_payload.get("recommended_checks") or []) if str(c).strip()]
     cited_ids = [s.source_id for s in cited]
@@ -722,9 +862,16 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
         evidence_sufficient=True,
         query=_query_public(extracted),
         scope=_scope_public(scope),
-        sources=[s.to_dict() for s in cited],
+        sources=[s.to_dict() for s in final_sources],
         retrieval=_retrieval_public(
-            len(trace.exact), len(trace.semantic), len(selected), extra={"duration_ms": duration}
+            len(trace.exact),
+            len(trace.semantic),
+            len(selected),
+            extra={
+                "duration_ms": duration,
+                "historical_matches": len(trace.historical),
+                "maintenance_items": len(maintenance_evidence),
+            },
         ),
         warnings=warnings,
         reason=decision.reason if status == "conflicting_evidence" else None,
@@ -801,6 +948,28 @@ async def build_deps(
         else:
             warnings.append("chat model is not configured")
 
+    # Phase 6 incident memory: supplementary historical evidence. Failure to
+    # initialise degrades gracefully (no historical evidence, manual RAG still
+    # works).
+    incident_store: IncidentStore | None = None
+    incident_vectors: IncidentVectorIndex | None = None
+    incident_memory_enabled = False
+    if settings.MONGODB_URI:
+        try:
+            from app.incident_memory.store import MongoIncidentStore
+
+            incident_store = MongoIncidentStore(settings)
+            incident_memory_enabled = True
+        except Exception as exc:  # noqa: BLE001
+            warnings.append(f"incident memory store unavailable: {str(exc)[:120]}")
+    try:
+        from app.incident_memory.indexing import IncidentVectorIndex as IncIndex
+
+        incident_vectors = IncIndex(new_qdrant_client(settings), settings.QDRANT_INCIDENT_COLLECTION)
+        incident_memory_enabled = incident_memory_enabled or True
+    except Exception as exc:  # noqa: BLE001
+        warnings.append(f"incident memory vectors unavailable: {str(exc)[:120]}")
+
     return PipelineDeps(
         store=resolved_store,
         embedder=resolved_embedder,
@@ -809,4 +978,9 @@ async def build_deps(
         config=config,
         embedding_model=settings.OLLAMA_EMBEDDING_MODEL,
         warnings=warnings,
+        incident_store=incident_store,
+        incident_vectors=incident_vectors,
+        incident_memory_enabled=incident_memory_enabled,
+        incident_top_k=settings.INCIDENT_HISTORY_TOP_K,
+        incident_max_context_chars=settings.INCIDENT_HISTORY_MAX_CONTEXT_CHARS,
     )

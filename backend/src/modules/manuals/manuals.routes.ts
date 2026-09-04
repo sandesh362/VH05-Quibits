@@ -33,6 +33,11 @@ export function manualRoutes(): Router {
   router.post(`${base}/:id/reprocess`, authorize('manual.reprocess'), asyncHandler(controller.reprocess));
   router.get(`${base}/:id/pages`, authorize('manual.read'), asyncHandler(controller.listPages));
   router.get(`${base}/:id/chunks`, authorize('manual.read'), asyncHandler(controller.listChunks));
+  router.get(
+    `${base}/:id/chunks/:chunkId`,
+    authorize('manual.read'),
+    asyncHandler(controller.getChunkById),
+  );
   router.get(`${base}/:id/processing-status`, authorize('manual.read'), asyncHandler(controller.processingStatus));
 
   return router;

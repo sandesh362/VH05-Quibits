@@ -7,7 +7,7 @@
  * reuses numbers after a delete, both of which are unacceptable for an
  * identifier people quote to each other.
  */
-import type { Db } from 'mongodb';
+import type { Db, ObjectId } from 'mongodb';
 
 const COUNTERS = 'counters';
 
@@ -36,12 +36,20 @@ export async function nextSequence(db: Db, key: string): Promise<number> {
 /**
  * Human-facing incident number, e.g. `INC-2026-000042`.
  *
- * Year-scoped so numbers restart annually and stay short, and zero-padded so
- * they sort lexicographically in the same order as numerically.
+ * Year-scoped so numbers restart annually and stay short, org-scoped so two
+ * organizations can never collide, and zero-padded so they sort
+ * lexicographically in the same order as numerically. Numbers are allocated
+ * atomically and are never reused after a delete/cancel (the counter only
+ * moves forward).
  */
-export async function nextIncidentNumber(db: Db, now = new Date()): Promise<string> {
+export async function nextIncidentNumber(
+  db: Db,
+  organizationId: ObjectId | string,
+  now = new Date(),
+): Promise<string> {
+  const org = typeof organizationId === 'string' ? organizationId : organizationId.toHexString();
   const year = now.getUTCFullYear();
-  const value = await nextSequence(db, `incident:${year}`);
+  const value = await nextSequence(db, `incident:${org}:${year}`);
   return `INC-${year}-${String(value).padStart(6, '0')}`;
 }
 

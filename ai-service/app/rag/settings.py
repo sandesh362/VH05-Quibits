@@ -5,7 +5,7 @@ from __future__ import annotations
 from app.core.config import Settings
 from app.rag.types import RagRuntimeConfig, RankingWeights
 
-PROMPT_VERSION = "rag-p4-v1"
+PROMPT_VERSION = "rag-p7-v1"
 
 # nomic-embed-text produces 768-d vectors. Used as a sanity default when a
 # live probe is unavailable; the query path still asserts against the actual

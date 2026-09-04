@@ -546,7 +546,7 @@ function toPageView(doc: ManualPageDoc) {
   };
 }
 
-function toChunkView(doc: ManualChunkDoc) {
+export function toChunkView(doc: ManualChunkDoc) {
   return {
     id: doc._id.toHexString(),
     manualId: doc.manual_id.toHexString(),
@@ -567,6 +567,17 @@ function toChunkView(doc: ManualChunkDoc) {
     qdrantPointId: doc.qdrant_point_id ?? null,
     indexingStatus: doc.indexing_status,
   };
+}
+
+/** A single chunk by id, for citation previews (Phase 8). Scoped to the manual. */
+export async function getChunkById(db: Db, manualId: ObjectId, chunkId: ObjectId) {
+  await requireLiveManual(db, manualId);
+  const doc = await collections.manualChunks(db).findOne({
+    _id: chunkId,
+    manual_id: manualId,
+  });
+  if (!doc) throw ApiError.notFound('Chunk not found in this manual.');
+  return toChunkView(doc);
 }
 
 /** Get the latest processing job status for a manual. */

@@ -82,5 +82,15 @@ export function conversationRoutes(): Router {
     asyncHandler(controller.patchSuggestion),
   );
 
+  /**
+   * Create an incident from this conversation. Only explicit factual
+   * information is copied; AI suggestions are never imported as facts.
+   */
+  router.post(
+    `${base}/:id/create-incident`,
+    authorize('incident.create'),
+    asyncHandler(controller.createIncident),
+  );
+
   return router;
 }

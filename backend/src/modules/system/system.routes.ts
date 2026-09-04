@@ -6,7 +6,7 @@
  */
 import os from 'node:os';
 import { Router, type Request, type Response } from 'express';
-import { PHASE_5_FEATURES, type SystemInfoResponse } from '@itp/shared';
+import { PHASE_6_FEATURES, type SystemInfoResponse } from '@itp/shared';
 import { getConfig } from '../../config/env.js';
 import { successEnvelope } from '../../core/api-error.js';
 
@@ -27,10 +27,10 @@ export function systemRoutes(): Router {
       apiPrefix: config.apiPrefix,
       nodeVersion: process.version,
       platform: `${os.type()} ${os.arch()}`,
-      phase: 'Phase 5 - Conversational Troubleshooting',
+      phase: 'Phase 7 - Maintenance History Lane and Machine Timeline',
       startedAt: STARTED_AT,
       uptimeSeconds: Math.round(process.uptime()),
-      features: PHASE_5_FEATURES,
+      features: PHASE_6_FEATURES,
       configuredDependencies,
     };
 

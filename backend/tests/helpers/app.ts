@@ -13,8 +13,9 @@ import type { Db } from 'mongodb';
 import { createApp } from '../../src/app.js';
 import { setDbForTests } from '../../src/db/mongo.js';
 import { collections } from '../../src/database/collections.js';
+import { ensureDefaultOrganization } from '../../src/database/bootstrap.js';
 import { hashPassword } from '../../src/common/password.js';
-import { startTestDb, clearTestDb, stopTestDb } from './db.js';
+import { startTestDb, clearTestDb, stopTestDb, getTestDb } from './db.js';
 import type { UserRole } from '@itp/shared';
 
 export const PREFIX = '/api/v1';
@@ -35,6 +36,7 @@ export async function setupTestApp(): Promise<{ app: Express; db: Db }> {
   const db = await startTestDb();
   // Make the application's own getDb() resolve to the in-memory instance.
   setDbForTests(db);
+  await ensureDefaultOrganization(db);
   return { app: createApp(), db };
 }
 
@@ -45,6 +47,10 @@ export async function teardownTestApp(): Promise<void> {
 
 export async function resetDb(): Promise<void> {
   await clearTestDb();
+  // Phase 6: every actor resolves to an organization. Production seeds the
+  // default org in prepareDatabase; restore it here after the wipe so
+  // resolveActorOrg has something to resolve to.
+  await ensureDefaultOrganization(getTestDb());
 }
 
 /**
@@ -55,7 +61,7 @@ export async function createUser(
   app: Express,
   db: Db,
   role: UserRole,
-  suffix = role,
+  suffix: string = role,
 ): Promise<TestUser> {
   const email = `${suffix}@example.test`;
   const username = `${suffix}_user`;

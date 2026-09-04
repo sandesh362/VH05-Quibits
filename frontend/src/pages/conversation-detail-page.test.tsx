@@ -22,6 +22,7 @@ const conversation = {
   issueSummary: 'Hydraulic pressure drops during startup',
   errorCodes: ['E-104'],
   symptoms: ['Pressure drop'],
+  incidentIds: [],
   lastMessageAt: '2026-09-04T10:00:00.000Z',
   messageCount: 2,
   createdAt: '2026-09-04T09:00:00.000Z',
@@ -128,12 +129,108 @@ describe('ConversationDetailPage', () => {
     expect(document.body.textContent).not.toMatch(/\/home\/|storage_path/);
   });
 
-  it('opens a source preview from the citation', async () => {
+  it('opens a citation preview that lands on the exact source chunk', async () => {
+    vi.spyOn(apiClient, 'getManualChunk').mockResolvedValue({
+      chunk: {
+        id: 'chunk-1',
+        manualId: 'man-1',
+        chunkIndex: 0,
+        pageStart: 42,
+        pageEnd: 43,
+        sectionTitle: 'Startup alarms',
+        sectionPath: ['Hydraulics', 'Startup'],
+        text: 'E-104 indicates low hydraulic pressure during startup.',
+        normalizedText: 'e-104 indicates low hydraulic pressure during startup.',
+        characterCount: 54,
+        wordCount: 9,
+        contentHash: 'h1',
+        indexingStatus: 'indexed',
+      },
+    });
     renderDetail();
     const citation = await screen.findByRole('button', { name: /Hydraulic Service Manual/ });
     await userEvent.click(citation);
-    expect(await screen.findByRole('dialog')).toHaveTextContent('E-104 indicates low hydraulic pressure during startup.');
-    expect(screen.getByText('source-1')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    expect(await screen.findByTestId('chunk-preview-text')).toHaveTextContent(
+      'E-104 indicates low hydraulic pressure during startup.',
+    );
+    expect(dialog).toHaveTextContent('source-1');
+    expect(dialog).toHaveTextContent('Hydraulics › Startup');
+    expect(dialog).toHaveTextContent('42–43');
+  });
+
+  it('shows the three evidence lanes in the legend', async () => {
+    renderDetail();
+    expect(await screen.findByText(/Evidence lanes in this conversation/)).toBeInTheDocument();
+    expect(screen.getByText(/Authoritative. Cited with page numbers/)).toBeInTheDocument();
+    expect(screen.getByText(/Supplementary context — not proof of this diagnosis/)).toBeInTheDocument();
+    expect(screen.getByText(/Non-causal context, never evidence of a cause/)).toBeInTheDocument();
+  });
+
+  it('opens the retrieval trace drawer for an answered message', async () => {
+    vi.spyOn(apiClient, 'listMessages').mockResolvedValue({
+      data: [
+        {
+          ...answered,
+          retrievalMetadata: {
+            exactMatches: 1,
+            semanticMatches: 4,
+            finalContextChunks: 2,
+            historicalMatches: 1,
+            maintenanceItems: 2,
+            warnings: ['Semantic search degraded'],
+          },
+        },
+      ],
+      meta: undefined,
+      status: 200,
+    });
+    renderDetail();
+    await screen.findByText(/Hydraulic startup alarm/);
+    await userEvent.click(screen.getByTestId('trace-msg-a'));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Retrieval trace');
+    expect(dialog).toHaveTextContent('Historical incidents');
+    expect(dialog).toHaveTextContent('Maintenance records');
+    expect(dialog).toHaveTextContent('Semantic search degraded');
+    expect(dialog).toHaveTextContent('source-1');
+  });
+
+  it('renders a maintenance source with the non-causal caption', async () => {
+    vi.spyOn(apiClient, 'listMessages').mockResolvedValue({
+      data: [
+        {
+          ...answered,
+          sources: [
+            {
+              sourceId: 'maint-1',
+              chunkId: 'maint-rec-1',
+              manualId: '',
+              manualTitle: 'MAINTENANCE PART_REPLACEMENT',
+              manualVersion: null,
+              pageStart: 0,
+              pageEnd: 0,
+              sectionTitle: 'Replaced suction strainer',
+              excerpt: null,
+              sourceType: 'maintenance',
+              daysBeforeIncident: 15,
+              correlationStrength: 'strong',
+              causalClaim: false,
+              notedByManual: true,
+              notedByManualSourceId: 'source-1',
+            },
+          ],
+        },
+      ],
+      meta: undefined,
+      status: 200,
+    });
+    renderDetail();
+    await screen.findByText(/Hydraulic startup alarm/);
+    expect(await screen.findByTestId('maintenance-caption')).toHaveTextContent(
+      /never causally linked to this fault/,
+    );
+    expect(screen.getByTestId('maintenance-caption')).toHaveTextContent(/correlation, not causation/);
   });
 
   it('shows a refusal when evidence is insufficient', async () => {

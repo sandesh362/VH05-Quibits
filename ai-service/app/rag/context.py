@@ -7,7 +7,7 @@ same page and section may be concatenated while retaining both source ids.
 
 from __future__ import annotations
 
-from app.rag.types import RetrievalHit, SourceRef
+from app.rag.types import HistoricalIncidentHit, RetrievalHit, SourceRef
 
 
 def sources_from_hits(hits: list[RetrievalHit]) -> list[SourceRef]:
@@ -156,6 +156,56 @@ def format_evidence_block(hits: list[RetrievalHit]) -> str:
         parts.append(
             f"{header}\n\nCONTENT:\n<<<UNTRUSTED_DOCUMENT_CONTENT>>>\n{body}\n<<<END_UNTRUSTED_DOCUMENT_CONTENT>>>"
         )
+    return "\n\n-----\n\n".join(parts)
+
+
+def format_historical_evidence_block(
+    hits: list[HistoricalIncidentHit], *, max_chars: int
+) -> str:
+    """Render historical incidents as clearly-labeled supplementary evidence.
+
+    Every block carries the HISTORICAL label, the incident number, dates, the
+    similarity reasons, and ONLY confirmed root-cause/fix content (unconfirmed
+    or rejected content is never embedded as a fact). Manual evidence is
+    rendered separately and remains authoritative.
+    """
+    parts: list[str] = []
+    used = 0
+    for hit in hits:
+        incident = hit.incident
+        resolved = incident.resolved_at or ""
+        resolved_bit = f", resolved {resolved[:10]}" if resolved else ""
+        header = (
+            f"SOURCE_ID: history-{len(parts) + 1}\n"
+            f"TYPE: HISTORICAL_INCIDENT_SOURCE (supplementary, not authoritative)\n"
+            f"INCIDENT: {incident.incident_number or '(unnumbered)'}{resolved_bit}\n"
+            f"SIMILARITY: {', '.join(hit.reasons) or 'semantic similarity'}\n"
+            f"STATUS: {incident.status} | issue {incident.issue_status}"
+        )
+        lines: list[str] = [header]
+        if incident.error_codes:
+            lines.append("Error codes: " + ", ".join(incident.error_codes))
+        if incident.symptoms:
+            lines.append("Symptoms: " + "; ".join(incident.symptoms[:4]))
+        if incident.operating_conditions:
+            lines.append(
+                "Operating conditions: " + "; ".join(incident.operating_conditions[:4])
+            )
+        if incident.confirmed_root_cause:
+            lines.append(f"Confirmed root cause (for THAT incident): {incident.confirmed_root_cause}")
+        if incident.confirmed_fix:
+            lines.append(f"Confirmed fix (for THAT incident): {incident.confirmed_fix}")
+        if incident.resolution_summary:
+            lines.append(f"Resolution summary: {incident.resolution_summary}")
+        if not incident.confirmed:
+            lines.append(
+                "NOTE: this incident is UNCONFIRMED or unresolved - speculative history, not proof."
+            )
+        block = "\n".join(lines).strip()
+        if used + len(block) > max_chars and parts:
+            break
+        parts.append(block)
+        used += len(block) + 40
     return "\n\n-----\n\n".join(parts)
 
 

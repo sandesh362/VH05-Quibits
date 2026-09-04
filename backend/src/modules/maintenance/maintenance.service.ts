@@ -23,6 +23,7 @@ import {
 } from '../../common/validation.js';
 import * as audit from '../audit/audit.service.js';
 import { requireLiveMachine } from '../machines/machines.service.js';
+import { resolveActorOrg } from '../organizations/organizations.service.js';
 
 export const SORTABLE = ['performed_at', 'created_at', 'updated_at', 'next_due_at'] as const;
 
@@ -112,7 +113,11 @@ export async function create(
   actor: Actor,
   requestId?: string,
 ): Promise<MaintenanceView> {
+  const org = await resolveActorOrg(db, actor.id, actor.username, actor.role);
   const machine = await requireLiveMachine(db, toObjectId(input.machineId));
+  if (machine.organization_id && !machine.organization_id.equals(org.orgId)) {
+    throw ApiError.notFound('Machine not found.');
+  }
 
   let relatedIncidentId: ObjectId | null = null;
   if (input.relatedIncidentId) {
@@ -136,6 +141,7 @@ export async function create(
 
   const now = new Date();
   const doc: Omit<MaintenanceRecordDoc, '_id'> = {
+    organization_id: org.orgId,
     machine_id: machine._id,
     // Derived from the machine, never from the request body.
     machine_model_id: machine.machine_model_id,
@@ -221,8 +227,9 @@ export interface ListQuery extends PaginationInput {
   search?: string;
 }
 
-export async function list(db: Db, query: ListQuery) {
-  const filter: Filter<MaintenanceRecordDoc> = {};
+export async function list(db: Db, query: ListQuery, actor: Actor) {
+  const org = await resolveActorOrg(db, actor.id, actor.username, actor.role);
+  const filter: Filter<MaintenanceRecordDoc> = { organization_id: org.orgId };
 
   if (query.machineId) filter.machine_id = toObjectId(query.machineId);
   if (query.machineModelId) filter.machine_model_id = toObjectId(query.machineModelId);
@@ -254,8 +261,11 @@ export async function list(db: Db, query: ListQuery) {
   return { items: result.items.map(toView), pagination: result.pagination };
 }
 
-export async function getById(db: Db, id: ObjectId): Promise<MaintenanceView> {
-  const doc = await collections.maintenanceRecords(db).findOne(liveFilter({ _id: id }));
+export async function getById(db: Db, id: ObjectId, actor: Actor): Promise<MaintenanceView> {
+  const org = await resolveActorOrg(db, actor.id, actor.username, actor.role);
+  const doc = await collections
+    .maintenanceRecords(db)
+    .findOne(liveFilter({ _id: id, organization_id: org.orgId }));
   if (!doc) throw ApiError.notFound('Maintenance record not found.');
   return toView(doc);
 }
@@ -276,7 +286,10 @@ export async function update(
   actor: Actor,
   requestId?: string,
 ): Promise<MaintenanceView> {
-  const existing = await collections.maintenanceRecords(db).findOne(liveFilter({ _id: id }));
+  const org = await resolveActorOrg(db, actor.id, actor.username, actor.role);
+  const existing = await collections
+    .maintenanceRecords(db)
+    .findOne(liveFilter({ _id: id, organization_id: org.orgId }));
   if (!existing) throw ApiError.notFound('Maintenance record not found.');
 
   const isAuthor = existing.performed_by?.equals(actor.id) ?? false;

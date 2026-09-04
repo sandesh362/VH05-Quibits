@@ -29,7 +29,7 @@ export async function create(req: Request, res: Response): Promise<void> {
 
 export async function list(req: Request, res: Response): Promise<void> {
   const query = parseOrThrow(listMaintenanceSchema, req.query);
-  const result = await service.list(requireDb(), query);
+  const result = await service.list(requireDb(), query, actorOf(req));
   res.status(200).json({
     success: true,
     data: result.items,
@@ -43,7 +43,7 @@ export async function list(req: Request, res: Response): Promise<void> {
 
 export async function getById(req: Request, res: Response): Promise<void> {
   const id = parseOrThrow(objectIdSchema, req.params.id);
-  const record = await service.getById(requireDb(), toObjectId(id));
+  const record = await service.getById(requireDb(), toObjectId(id), actorOf(req));
   res.status(200).json(successEnvelope({ maintenanceRecord: record }, req.requestId));
 }
 

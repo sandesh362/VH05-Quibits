@@ -137,3 +137,8 @@ export async function changePassword(req: Request, res: Response): Promise<void>
     ),
   );
 }
+
+export async function listUsers(req: Request, res: Response): Promise<void> {
+  const users = await authService.listUsers(requireDb());
+  res.status(200).json(successEnvelope({ users }, req.requestId));
+}

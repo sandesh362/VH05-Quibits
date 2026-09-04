@@ -258,3 +258,218 @@
     flex-direction: column;
   }
 }
+
+/* --- Phase 8: evidence lanes, citation preview, retrieval trace ------------ */
+.lane-legend {
+  border-left: 4px solid var(--color-border);
+}
+
+.lane-legend__title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-subtle);
+  margin: 0 0 var(--space-sm);
+}
+
+.lane-legend__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.lane-legend__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  font-size: 0.85rem;
+  color: var(--color-text-subtle);
+}
+
+.lane-chip {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.lane-chip--manual {
+  background: var(--color-bg);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.lane-chip--incident {
+  background: var(--color-warn-bg, #fff4e0);
+  border-color: var(--color-warn);
+  color: var(--color-warn-dark, #7a4a00);
+}
+
+.lane-chip--maintenance {
+  background: var(--color-info-bg, #e0f2fe);
+  border-color: var(--color-info, #0284c7);
+  color: var(--color-info-dark, #075985);
+}
+
+.citation {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.citation--manual {
+  border-left: 3px solid var(--color-border);
+  padding-left: var(--space-sm);
+}
+
+.citation--incident {
+  border-left: 3px solid var(--color-warn);
+  padding-left: var(--space-sm);
+}
+
+.citation--maintenance {
+  border-left: 3px solid var(--color-info, #0284c7);
+  padding-left: var(--space-sm);
+}
+
+.source-caption {
+  font-size: 0.8rem;
+  color: var(--color-text-subtle);
+  font-style: italic;
+}
+
+.source-caption--incident {
+  border-left: 3px solid var(--color-warn);
+  padding: var(--space-sm);
+  color: var(--color-warn-dark, #7a4a00);
+  background: var(--color-warn-bg, #fff4e0);
+  font-style: normal;
+}
+
+.source-caption--maintenance {
+  border-left: 3px solid var(--color-info, #0284c7);
+  padding: var(--space-sm);
+  color: var(--color-info-dark, #075985);
+  background: var(--color-info-bg, #e0f2fe);
+  font-style: normal;
+}
+
+.source-caption--manual {
+  border-left: 3px solid var(--color-border);
+  padding: var(--space-sm);
+  background: var(--color-bg);
+  font-style: normal;
+}
+
+.modal__card--wide {
+  max-width: 760px;
+  max-height: min(85vh, 900px);
+  overflow: auto;
+}
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.modal__title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.modal__close {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  width: 2.2rem;
+  height: 2.2rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-md);
+}
+
+.chunk-preview__path {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
+  margin: 0 0 var(--space-sm);
+}
+
+.chunk-preview__text {
+  margin: 0;
+  padding: var(--space-md);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.chunk-preview__note {
+  font-size: 0.78rem;
+  color: var(--color-text-subtle);
+  font-style: italic;
+  margin: var(--space-sm) 0 0;
+}
+
+.trace-lanes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-sm);
+}
+
+.trace-lane {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-left-width: 4px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.trace-lane__count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.trace-warnings,
+.trace-sources {
+  font-size: 0.85rem;
+}
+
+.trace-warnings ul,
+.trace-sources ul {
+  margin: var(--space-xs) 0 0;
+  padding-left: 1.1rem;
+}
+
+.trace-sources code {
+  background: var(--color-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}

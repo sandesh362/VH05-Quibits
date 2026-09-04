@@ -3,6 +3,8 @@ import {
   CONFIRMED_ISSUE_STATUSES,
   CONVERSATION_STATUSES,
   ISSUE_STATUSES,
+  PRIORITIES,
+  SEVERITIES,
   SUGGESTED_ACTION_STATUSES,
   TECHNICIAN_ACTION_STATUSES,
 } from '@itp/shared';
@@ -144,3 +146,14 @@ export const suggestionStatusSchema = z
   .strict();
 
 export const listActionsSchema = paginationSchema.strict();
+
+export const createIncidentFromConversationSchema = z
+  .object({
+    title: boundedText(3, 200, 'Title'),
+    description: boundedText(1, 4000, 'Description').optional(),
+    severity: z.enum(SEVERITIES).optional(),
+    priority: z.enum(PRIORITIES).optional(),
+    assignedTo: objectIdSchema.nullable().optional(),
+    tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+  })
+  .strict();

@@ -25,6 +25,7 @@ from app.core.logging import configure_logging, get_logger
 from app.core.middleware import RequestContextMiddleware, get_request_id
 from app.routers import documents as documents_router
 from app.routers import health as health_router
+from app.routers import incidents as incidents_router
 from app.routers import indexing as indexing_router
 from app.routers import rag as rag_router
 from app.routers import retrieval as retrieval_router
@@ -201,6 +202,7 @@ app.include_router(documents_router.router, prefix=settings.RAG_API_PREFIX)
 app.include_router(indexing_router.router, prefix=settings.RAG_API_PREFIX)
 app.include_router(retrieval_router.router, prefix=settings.RAG_API_PREFIX)
 app.include_router(rag_router.router, prefix=settings.RAG_API_PREFIX)
+app.include_router(incidents_router.router, prefix=settings.RAG_API_PREFIX)
 
 
 @app.get("/healthz", include_in_schema=False)

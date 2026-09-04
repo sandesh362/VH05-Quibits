@@ -140,6 +140,17 @@ const envSchema = z
     /** Qdrant collection holding manual chunk vectors. */
     QDRANT_MANUAL_COLLECTION: z.string().min(1).default('manual_chunks'),
 
+    // Incident memory (Phase 6)
+    /** Qdrant collection holding incident vectors - separate from manual chunks. */
+    QDRANT_INCIDENT_COLLECTION: z.string().min(1).default('incident_memory'),
+    INCIDENT_INDEX_RETRY_LIMIT: z.coerce.number().int().min(0).max(10).default(3),
+    INCIDENT_INDEX_RETRY_DELAY_MS: z.coerce.number().int().min(1_000).max(300_000).default(30_000),
+    INCIDENT_SIMILAR_LIMIT: z.coerce.number().int().min(1).max(25).default(10),
+
+    // Maintenance history lane (Phase 7)
+    MAINTENANCE_HISTORY_DAYS: z.coerce.number().int().min(1).max(3_650).default(365),
+    MAINTENANCE_CONTEXT_MAX_ITEMS: z.coerce.number().int().min(1).max(25).default(5),
+
     // Authentication (Phase 2 - now actively used)
     JWT_SECRET: secretSchema('JWT_SECRET'),
     JWT_EXPIRATION: z.string().default('15m'),
@@ -300,6 +311,16 @@ export interface AppConfig {
     readonly rateLimitWindowMinutes: number;
   };
   readonly incidentConfirmationMode: 'self' | 'supervisor';
+  readonly incidentMemory: {
+    readonly qdrantCollection: string;
+    readonly indexRetryLimit: number;
+    readonly indexRetryDelayMs: number;
+    readonly similarLimit: number;
+  };
+  readonly maintenanceHistory: {
+    readonly days: number;
+    readonly maxContextItems: number;
+  };
   readonly bootstrapAdmin:
     | { readonly email: string; readonly username: string; readonly password: string }
     | null;
@@ -415,6 +436,16 @@ export function parseConfig(source: NodeJS.ProcessEnv = process.env): AppConfig 
       rateLimitWindowMinutes: env.AUTH_RATE_LIMIT_WINDOW_MINUTES,
     },
     incidentConfirmationMode: env.INCIDENT_CONFIRMATION_MODE,
+    incidentMemory: {
+      qdrantCollection: env.QDRANT_INCIDENT_COLLECTION,
+      indexRetryLimit: env.INCIDENT_INDEX_RETRY_LIMIT,
+      indexRetryDelayMs: env.INCIDENT_INDEX_RETRY_DELAY_MS,
+      similarLimit: env.INCIDENT_SIMILAR_LIMIT,
+    },
+    maintenanceHistory: {
+      days: env.MAINTENANCE_HISTORY_DAYS,
+      maxContextItems: env.MAINTENANCE_CONTEXT_MAX_ITEMS,
+    },
     bootstrapAdmin:
       env.BOOTSTRAP_ADMIN_EMAIL && env.BOOTSTRAP_ADMIN_USERNAME && env.BOOTSTRAP_ADMIN_PASSWORD
         ? {

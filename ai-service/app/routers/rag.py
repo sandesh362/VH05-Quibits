@@ -28,6 +28,9 @@ class RagAnswerRequestModel(BaseModel):
     include_inactive: bool = False
     conversation_id: str | None = None
     conversation_context: dict[str, Any] | None = None
+    organization_id: str | None = None
+    maintenance_context: list[dict[str, Any]] | None = None
+    query_at: str | None = None
     debug: bool = False
     top_k: int | None = Field(default=None, ge=1, le=50)
 
@@ -46,6 +49,8 @@ async def rag_answer(
         store = deps.store
         if isinstance(store, MongoChunkStore):
             await store.close()
+        if deps.incident_store is not None and hasattr(deps.incident_store, "close"):
+            await deps.incident_store.close()
     return success_envelope(result.to_dict(), get_request_id(request))
 
 
