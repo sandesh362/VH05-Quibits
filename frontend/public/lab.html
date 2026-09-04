@@ -279,7 +279,20 @@
         (manuals || []).forEach((m) => {
           const opt = document.createElement('option');
           opt.value = m.id;
-          opt.textContent = `${m.title} v${m.documentVersion || '?'} · ${m.processingStatus} · ${m.indexedChunkCount} chunks`;
+          // Show a helpful chunk count even when indexing failed: prefer
+          // indexedChunkCount, but fall back to failureReason that now
+          // includes "created N chunks" when embedding failed.
+          const chunkLabel = m.indexedChunkCount > 0
+            ? `${m.indexedChunkCount} chunks`
+            : (m.failureReason && /created\s+\d+\s+chunks/i.test(m.failureReason)
+                ? m.failureReason.match(/created\s+(\d+)\s+chunks/i)[0]
+                : '0 chunks');
+          const status = m.processingStatus === 'failed' && m.failureReason
+            ? `failed — ${m.failureReason.slice(0, 80)}`
+            : m.processingStatus;
+          opt.textContent = `${m.title} v${m.documentVersion || '?'} · ${status} · ${chunkLabel}`;
+          opt.title = m.failureReason || '';
+          if (m.processingStatus === 'failed') opt.style.color = '#f87171';
           select.appendChild(opt);
         });
         if (current) select.value = current;
@@ -403,13 +416,26 @@
           return;
         }
         const form = e.target;
+        const file = form.file.files[0];
+        if (!file) {
+          $('upload-msg').textContent = 'Choose a PDF file to upload.';
+          return;
+        }
+        if (file.size === 0) {
+          $('upload-msg').textContent = 'The selected file is empty.';
+          return;
+        }
+        if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+          $('upload-msg').textContent = 'Only PDF files are supported.';
+          return;
+        }
         const fd = new FormData();
         fd.set('title', form.title.value);
         fd.set('scope', 'model');
         fd.set('machineModelId', modelId);
         fd.set('documentType', form.documentType.value);
         if (form.documentVersion.value) fd.set('documentVersion', form.documentVersion.value);
-        fd.set('file', form.file.files[0]);
+        fd.set('file', file);
         $('upload-msg').textContent = 'Uploading… processing runs in the background.';
         try {
           const data = await api('/manuals', { method: 'POST', body: fd, form: true, timeoutMs: 60000 });

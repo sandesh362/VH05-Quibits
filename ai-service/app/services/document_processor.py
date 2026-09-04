@@ -60,7 +60,14 @@ def _resolve_pdf(settings: Settings, storage_path: str) -> Path:
     """Resolve the PDF path under the storage root, rejecting traversal."""
     root = settings.storage_root_path.resolve()
     candidate = (root / storage_path).resolve()
-    if root not in candidate.parents and candidate != root:
+    # Use is_relative_to when available (Python 3.9+); fallback to parents check
+    # for older interpreters.  This correctly handles symlinks and the case
+    # where candidate == root.
+    try:
+        is_inside = candidate.is_relative_to(root)  # type: ignore[attr-defined]
+    except AttributeError:
+        is_inside = root in candidate.parents or candidate == root
+    if not is_inside:
         raise ServiceError(
             "VALIDATION_ERROR",
             "The requested storage path is outside the storage root.",
@@ -99,12 +106,25 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
         pages = extract_pdf_pages(str(pdf_path))
         page_count = len(pages)
 
+        # A PDF with zero pages is either corrupted or an empty file that passed
+        # the magic-byte check (e.g. a minimal %PDF header with no Pages tree).
+        # Fail here with a clear message rather than letting chunking raise a
+        # generic "No meaningful text" that hides the real cause.
+        if page_count == 0:
+            raise ServiceError(
+                "VALIDATION_ERROR",
+                "The PDF has no readable pages. It may be corrupted or empty.",
+            )
+
         # ---- 2. OCR (if enabled and text-poor pages exist) ---------------------
         poor_pages = detect_text_poor_pages(pages, min_chars) if ocr_enabled else []
         ocr_used = False
         ocr_count = 0
         if poor_pages:
             await writer.update(current_stage="ocr_processing", progress_percent=25)
+            # ocr_pages will raise SERVICE_UNAVAILABLE if Tesseract is missing;
+            # that is an explicit, actionable failure rather than a silent
+            # empty result that would later surface as "No meaningful text".
             ocr_results = await ocr_pages(str(pdf_path), poor_pages, ocr_language)
             for page in pages:
                 if page.page_number in ocr_results:
@@ -122,14 +142,58 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
 
             save_ocr_artifacts(settings.manual_storage_root / req.manual_id, pages)
 
+            # If OCR was required (majority of pages were text-poor) but produced
+            # no text at all, surface a clear error. This handles scanned PDFs
+            # where Tesseract returned empty or language pack missing.
+            if poor_pages and ocr_count == 0:
+                # Check if after OCR all pages are still empty – then cleaning
+                # will yield nothing and chunking will fail with a generic
+                # message.  Raise a more helpful error now.
+                still_poor = [
+                    p.page_number
+                    for p in pages
+                    if len((p.raw_text or "").strip()) < min_chars
+                ]
+                if len(still_poor) == page_count:
+                    log.warning(
+                        "ocr_produced_no_text",
+                        poor_pages=poor_pages,
+                        language=ocr_language,
+                    )
+                    # Do not raise hard here – let the cleaning + chunking step
+                    # produce the canonical "No meaningful text" error, but the
+                    # log now contains the actionable context (language, etc.)
+
         # ---- 3. Clean ----------------------------------------------------------
         await writer.update(current_stage="text_cleaning", progress_percent=45)
         for page in pages:
             cleaned = clean_text(page.raw_text)
+            # Defensive fallback: if cleaning collapses a page to empty but the
+            # raw text had visible characters, keep the raw text for chunking.
+            # This protects against over-aggressive cleaning on PDFs with
+            # unusual whitespace or control characters (e.g. compressed streams
+            # that decode to text without conventional spaces).
+            if not cleaned.strip() and (page.raw_text or "").strip():
+                log.warning(
+                    "cleaning_produced_empty_fallback_to_raw",
+                    page=page.page_number,
+                    raw_len=len(page.raw_text),
+                )
+                cleaned = (page.raw_text or "").strip()
             page.cleaned_text = cleaned
             page.character_count = len(cleaned)
-            page.word_count = len(cleaned.split(" "))
+            # Use generic whitespace split for word count (handles newlines).
+            page.word_count = len(cleaned.split())
             page.has_text = len(cleaned) > 0
+
+        # If every page is empty after cleaning, we will fail at chunking;
+        # log the raw vs cleaned lengths to aid debugging of compressed PDFs.
+        if all(not getattr(p, "has_text", False) for p in pages):
+            log.warning(
+                "all_pages_empty_after_cleaning",
+                raw_total=sum(len(p.raw_text or "") for p in pages),
+                cleaned_total=sum(len(getattr(p, "cleaned_text", "") or "") for p in pages),
+            )
 
         # ---- 4. Chunk ----------------------------------------------------------
         await writer.update(current_stage="chunking", progress_percent=55)
@@ -140,71 +204,145 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
             min_size=int(opts.get("min_chunk_size", settings.MIN_CHUNK_SIZE)),
             max_size=int(opts.get("max_chunk_size", settings.MAX_CHUNK_SIZE)),
         )
-
-        # ---- 5. Embeddings -----------------------------------------------------
-        await writer.update(current_stage="embedding", progress_percent=65)
-        ollama = OllamaEmbeddingClient(settings)
-        await ollama.ping()
-        embedding_model = opts.get("embedding_model", settings.embedding_model)
-        qdrant = new_qdrant_client(settings)
-
-        # Probe dimension and ensure the collection matches it.
-        dimension = await ollama.dimension_probe()
-        collection = opts.get("collection_name", settings.QDRANT_MANUAL_COLLECTION)
-        await qdrant.ensure_collection(collection, dimension)
-
-        if bool(opts.get("delete_existing", True)):
-            await writer.update(current_stage="indexing", progress_percent=80)
-            await qdrant.delete_by_manual(collection, req.manual_id)
-
-        # Embed in batches, building Qdrant points.
-        points: list[Any] = []
-        embedded_chunks: list[dict[str, Any]] = []
-        texts = [c["normalized_text"] for c in chunks]
-        for start in range(0, len(texts), EMBED_BATCH):
-            batch = texts[start : start + EMBED_BATCH]
-            vectors = await ollama.embed(batch)
-            for chunk, vector in zip(chunks[start : start + EMBED_BATCH], vectors, strict=False):
-                if len(vector) != dimension:
-                    raise ServiceError(
-                        "INTERNAL_SERVER_ERROR",
-                        "Embedding dimension mismatch detected during indexing.",
-                    )
-                point_id = manual_chunk_point_id(
-                    req.manual_id, chunk["chunk_index"], EMBEDDING_VERSION
-                )
-                chunk["embedding_model"] = embedding_model
-                chunk["embedding_dimension"] = dimension
-                chunk["qdrant_point_id"] = point_id
-                chunk["indexing_status"] = "indexed"
-                payload = build_chunk_payload(
-                    manual_id=req.manual_id,
-                    manual_title=req.manual.get("title", ""),
-                    manual_version=req.manual.get("document_version") or None,
-                    manufacturer=req.manual.get("manufacturer") or None,
-                    manual_type=req.manual.get("document_type", ""),
-                    language=req.manual.get("language", "en"),
-                    machine_model_id=req.machine_model_id,
-                    chunk=chunk,
-                    embedding_model=embedding_model,
-                    embedding_version=EMBEDDING_VERSION,
-                )
-                points.append(PointStruct(id=point_id, vector=vector, payload=payload))
-                embedded_chunks.append(chunk)
-
-        await qdrant.upsert_chunks(collection, points)
-        indexed_count = await qdrant.count_by_manual(collection, req.manual_id)
-
+        # Record chunk/page counts immediately so the job shows them even if
+        # later stages (embeddings / Qdrant) fail.  Previously the count was
+        # only written after successful indexing, so a failure there surfaced
+        # as "0 chunks" in the UI.
         await writer.update(
-            current_stage="indexing",
-            progress_percent=95,
             total_pages=page_count,
             processed_pages=page_count,
             total_chunks=len(chunks),
             processed_chunks=len(chunks),
-            embedding_model=embedding_model,
-            embedding_dimension=dimension,
         )
+        # Persist chunk artifacts early as well – useful for debugging even
+        # when the vector index step fails.
+        try:
+            _write_artifacts(settings, req.manual_id, pages, chunks, 0)
+        except Exception:  # noqa: BLE001
+            pass
+
+        # ---- 5. Embeddings -----------------------------------------------------
+        await writer.update(current_stage="embedding", progress_percent=65)
+        try:
+            ollama = OllamaEmbeddingClient(settings)
+            await ollama.ping()
+            embedding_model = opts.get("embedding_model", settings.embedding_model)
+            qdrant = new_qdrant_client(settings)
+
+            # Probe dimension and ensure the collection matches it.
+            dimension = await ollama.dimension_probe()
+            collection = opts.get("collection_name", settings.QDRANT_MANUAL_COLLECTION)
+            await qdrant.ensure_collection(collection, dimension)
+
+            if bool(opts.get("delete_existing", True)):
+                await writer.update(current_stage="indexing", progress_percent=80)
+                await qdrant.delete_by_manual(collection, req.manual_id)
+
+            # Embed in batches, building Qdrant points.
+            points: list[Any] = []
+            embedded_chunks: list[dict[str, Any]] = []
+            texts = [c["normalized_text"] for c in chunks]
+            for start in range(0, len(texts), EMBED_BATCH):
+                batch = texts[start : start + EMBED_BATCH]
+                try:
+                    vectors = await ollama.embed(batch)
+                except ServiceError as exc:
+                    # Attach chunk context and make the message actionable.
+                    exc.internal_context.update(
+                        {
+                            "page_count": page_count,
+                            "chunk_count": len(chunks),
+                            "failed_at": "embedding",
+                        }
+                    )
+                    # Surface the count in the message so the Express caller
+                    # can display it (internal_context is not returned).
+                    if "chunk" not in exc.message.lower():
+                        exc.message = (
+                            f"{exc.message} (created {len(chunks)} chunks from "
+                            f"{page_count} pages before failure)"
+                        )
+                    raise
+                for chunk, vector in zip(chunks[start : start + EMBED_BATCH], vectors, strict=False):
+                    if len(vector) != dimension:
+                        raise ServiceError(
+                            "INTERNAL_SERVER_ERROR",
+                            "Embedding dimension mismatch detected during indexing.",
+                            internal_context={
+                                "page_count": page_count,
+                                "chunk_count": len(chunks),
+                            },
+                        )
+                    point_id = manual_chunk_point_id(
+                        req.manual_id, chunk["chunk_index"], EMBEDDING_VERSION
+                    )
+                    chunk["embedding_model"] = embedding_model
+                    chunk["embedding_dimension"] = dimension
+                    chunk["qdrant_point_id"] = point_id
+                    chunk["indexing_status"] = "indexed"
+                    payload = build_chunk_payload(
+                        manual_id=req.manual_id,
+                        manual_title=req.manual.get("title", ""),
+                        manual_version=req.manual.get("document_version") or None,
+                        manufacturer=req.manual.get("manufacturer") or None,
+                        manual_type=req.manual.get("document_type", ""),
+                        language=req.manual.get("language", "en"),
+                        machine_model_id=req.machine_model_id,
+                        chunk=chunk,
+                        embedding_model=embedding_model,
+                        embedding_version=EMBEDDING_VERSION,
+                    )
+                    points.append(PointStruct(id=point_id, vector=vector, payload=payload))
+                    embedded_chunks.append(chunk)
+
+            try:
+                await qdrant.upsert_chunks(collection, points)
+                indexed_count = await qdrant.count_by_manual(collection, req.manual_id)
+            except ServiceError as exc:
+                exc.internal_context.update(
+                    {"page_count": page_count, "chunk_count": len(chunks)}
+                )
+                if "chunk" not in exc.message.lower():
+                    exc.message = (
+                        f"{exc.message} (created {len(chunks)} chunks from "
+                        f"{page_count} pages before failure)"
+                    )
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise ServiceError(
+                    "SERVICE_UNAVAILABLE",
+                    f"Qdrant indexing failed (created {len(chunks)} chunks from {page_count} pages).",
+                    internal_context={
+                        "detail": str(exc)[:200],
+                        "page_count": page_count,
+                        "chunk_count": len(chunks),
+                    },
+                ) from exc
+
+            await writer.update(
+                current_stage="indexing",
+                progress_percent=95,
+                total_pages=page_count,
+                processed_pages=page_count,
+                total_chunks=len(chunks),
+                processed_chunks=len(chunks),
+                embedding_model=embedding_model,
+                embedding_dimension=dimension,
+            )
+        except ServiceError:
+            # Re-raise with chunk context preserved; the caller (Express) can
+            # surface the count in the failure reason.
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise ServiceError(
+                "INTERNAL_SERVER_ERROR",
+                "Manual processing failed before indexing.",
+                internal_context={
+                    "detail": str(exc)[:300],
+                    "page_count": page_count,
+                    "chunk_count": len(chunks),
+                },
+            ) from exc
 
         # ---- 6. Persist artifacts (debugging / reprocessing) -------------------
         _write_artifacts(settings, req.manual_id, pages, chunks, indexed_count)

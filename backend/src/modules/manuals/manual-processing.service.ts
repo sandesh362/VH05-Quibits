@@ -294,13 +294,40 @@ export async function runManualPipeline(
     );
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
+    // Try to enrich the failure reason with chunk/page counts that FastAPI
+    // already wrote to the job document before the failure (chunking stage).
+    // That way the UI does not show "0 chunks" when chunks were actually
+    // created but embedding/indexing failed.
+    let jobCounts: { total_pages?: number | null; total_chunks?: number | null } = {};
+    try {
+      const job = await collections.manualProcessingJobs(db).findOne({ _id: jobId });
+      if (job) {
+        jobCounts = {
+          total_pages: (job as unknown as { total_pages?: number | null }).total_pages,
+          total_chunks: (job as unknown as { total_chunks?: number | null }).total_chunks,
+        };
+      }
+    } catch {
+      // best-effort
+    }
     const safeMessage = err.message.slice(0, 500);
     const now = new Date();
 
-    await collections.manuals(db).updateOne(
-      { _id: manualId },
-      { $set: { processing_status: 'failed', failed_at: now, failure_reason: safeMessage, updated_at: now } },
-    );
+    // Update the manual with whatever progress we know (so "0 chunks" is not
+    // shown when chunks were created).  indexed_chunk_count stays 0 because
+    // nothing was indexed, but page_count is useful and failure_reason will
+    // mention the created count.
+    const manualSet: Record<string, unknown> = {
+      processing_status: 'failed',
+      failed_at: now,
+      failure_reason: safeMessage,
+      updated_at: now,
+    };
+    if (jobCounts.total_pages) manualSet.page_count = jobCounts.total_pages;
+    // Do not set indexed_chunk_count to a non-zero value on failure – the
+    // manual is not searchable – but record the attempted count in the
+    // failure_reason for operators.  The job already has the accurate count.
+    await collections.manuals(db).updateOne({ _id: manualId }, { $set: manualSet });
     await collections.manualProcessingJobs(db).updateOne(
       { _id: jobId },
       {

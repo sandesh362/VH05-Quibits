@@ -47,7 +47,7 @@ const EMPTY: FormValues = {
   title: '',
   scope: 'model',
   machineModelId: '',
-  documentType: 'service_manual',
+  documentType: 'service',
   documentVersion: '',
   documentNumber: '',
   language: 'en',
