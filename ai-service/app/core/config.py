@@ -72,9 +72,9 @@ class Settings(BaseSettings):
     # -- Ollama --------------------------------------------------------------
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")
     # Empty until an operator pulls a model. Never assume one is installed.
-    OLLAMA_CHAT_MODEL: str = Field(default="llama3.1")
-    OLLAMA_EMBEDDING_MODEL: str = Field(default="nomic-embed-text")
-    OLLAMA_TIMEOUT_MS: int = Field(default=5000, ge=100, le=120_000)
+    OLLAMA_CHAT_MODEL: str = Field(default="llama3.1:3b")
+    OLLAMA_EMBEDDING_MODEL: str = Field(default="all-minilm")
+    OLLAMA_TIMEOUT_MS: int = Field(default=120_000, ge=100, le=120_000)
 
     # -- Retrieval / RAG (Phase 4) -------------------------------------------
     RAG_TEMPERATURE: float = Field(default=0.1, ge=0.0, le=1.0)
@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     RAG_WEIGHT_SEMANTIC: float = Field(default=0.45, ge=0.0, le=1.0)
     RAG_WEIGHT_SECTION: float = Field(default=0.05, ge=0.0, le=1.0)
     RAG_DUPLICATE_PENALTY: float = Field(default=0.05, ge=0.0, le=1.0)
-    RAG_EXPECTED_EMBEDDING_DIMENSION: int = Field(default=768, ge=0, le=4096)
+    RAG_EXPECTED_EMBEDDING_DIMENSION: int = Field(default=384, ge=0, le=4096)
     RAG_LOG_QUERY_TEXT: bool = Field(default=False)
 
     # -- Storage -------------------------------------------------------------

@@ -151,9 +151,9 @@ class IncidentVectorIndex:
             embedding_model=embedding_model,
         )
         try:
-            points = await self.wrapper.client.search(
+            result = await self.wrapper.client.query_points(
                 collection_name=self.collection,
-                query_vector=vector,
+                query=vector,
                 query_filter=query_filter,
                 limit=limit,
                 with_payload=True,
@@ -167,7 +167,7 @@ class IncidentVectorIndex:
             ) from exc
 
         out: list[tuple[HistoricalIncident, float]] = []
-        for point in points:
+        for point in result.points:
             payload = point.payload or {}
             out.append((incident_from_payload(payload, str(point.id)), float(point.score)))
         return out

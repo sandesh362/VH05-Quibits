@@ -7,10 +7,10 @@ from app.rag.types import RagRuntimeConfig, RankingWeights
 
 PROMPT_VERSION = "rag-p7-v1"
 
-# nomic-embed-text produces 768-d vectors. Used as a sanity default when a
-# live probe is unavailable; the query path still asserts against the actual
-# vector and the Qdrant collection.
-NOMIC_EMBED_DIMENSION = 768
+# all-minilm, the default embedding model, produces 384-d vectors. Deployments
+# using another model should set RAG_EXPECTED_EMBEDDING_DIMENSION explicitly;
+# the query path still asserts against the actual vector and Qdrant collection.
+DEFAULT_EMBEDDING_DIMENSION = 384
 
 
 def rag_config_from_settings(settings: Settings) -> RagRuntimeConfig:
@@ -26,7 +26,7 @@ def rag_config_from_settings(settings: Settings) -> RagRuntimeConfig:
     expected_dim = (
         settings.RAG_EXPECTED_EMBEDDING_DIMENSION
         if settings.RAG_EXPECTED_EMBEDDING_DIMENSION > 0
-        else NOMIC_EMBED_DIMENSION
+        else DEFAULT_EMBEDDING_DIMENSION
     )
     return RagRuntimeConfig(
         top_k=settings.RAG_TOP_K,
