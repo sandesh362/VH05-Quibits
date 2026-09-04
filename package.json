@@ -1,0 +1,43 @@
+{
+  "name": "industrial-troubleshooting-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first industrial troubleshooting and maintenance intelligence platform (Phase 1: infrastructure foundation)",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.10.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "packages/shared",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @itp/shared",
+    "dev": "npm run build:shared && concurrently -n api,ai,web -c cyan,yellow,magenta \"npm:dev:backend\" \"npm:dev:ai\" \"npm:dev:frontend\"",
+    "dev:backend": "npm run dev --workspace @itp/backend",
+    "dev:ai": "cd ai-service && \"$(test -x .venv/bin/python && echo .venv/bin/python || echo python3)\" -m uvicorn app.main:app --reload --host 0.0.0.0 --port \"${RAG_SERVICE_PORT:-8000}\"",
+    "dev:frontend": "npm run dev --workspace @itp/frontend",
+    "build": "npm run build:shared && npm run build --workspace @itp/backend && npm run build --workspace @itp/frontend",
+    "test": "npm run build:shared && npm run test --workspace @itp/backend && npm run test --workspace @itp/frontend",
+    "test:backend": "npm run build:shared && npm run test --workspace @itp/backend",
+    "test:ai": "cd ai-service && \"$(test -x .venv/bin/python && echo .venv/bin/python || echo python3)\" -m pytest",
+    "test:frontend": "npm run test --workspace @itp/frontend",
+    "typecheck": "npm run build:shared && npm run typecheck --workspace @itp/backend && npm run typecheck --workspace @itp/frontend",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:ai": "cd ai-service && \"$(test -x .venv/bin/ruff && echo .venv/bin/ruff || echo ruff)\" check .",
+    "preflight": "bash scripts/preflight.sh",
+    "verify": "bash scripts/verify-stack.sh",
+    "reset": "bash scripts/reset-data.sh",
+    "backup": "bash scripts/backup-data.sh",
+    "docker:up": "docker compose up -d --build",
+    "docker:down": "docker compose down",
+    "docker:reset": "docker compose down -v",
+    "docker:logs": "docker compose logs -f",
+    "docker:config": "docker compose config --quiet && echo 'docker-compose.yml is valid'"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

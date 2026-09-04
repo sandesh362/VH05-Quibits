@@ -1,0 +1,234 @@
+# Industrial Troubleshooting Platform - local development stack
+#
+# Everything runs on your machine. No cloud services are contacted.
+#
+#   docker compose up -d          start the stack
+#   docker compose ps             see health
+#   docker compose logs -f api    follow one service
+#   docker compose down           stop, KEEPING data
+#   docker compose down -v        stop and DELETE all data (intentional reset)
+#
+# NOTE ON OLLAMA: it runs on the HOST, not in this file. GPU passthrough in
+# Docker is platform-specific and fragile; a host install is faster to set up
+# and is what a judge will already have. Containers reach it through
+# host.docker.internal, which is mapped for Linux via extra_hosts.
+#
+# NO SECRETS IN THIS FILE. Every credential comes from .env, which is
+# git-ignored. Copy .env.example to .env and fill it in first.
+
+name: itp
+
+services:
+  # ------------------------------------------------------------------------
+  # MongoDB - primary datastore
+  # ------------------------------------------------------------------------
+  mongo:
+    image: mongo:7.0
+    container_name: itp-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?set MONGO_ROOT_USERNAME in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-itp}
+    # Bound to 127.0.0.1 so the database is reachable from your machine (for
+    # Compass / mongosh) but NEVER from the local network.
+    ports:
+      - '127.0.0.1:${MONGO_PORT:-27017}:27017'
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    healthcheck:
+      # A real query, not just a TCP probe.
+      test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - itp-net
+
+  # ------------------------------------------------------------------------
+  # Qdrant - vector database (no collections are created in Phase 1)
+  # ------------------------------------------------------------------------
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    container_name: itp-qdrant
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__LOG_LEVEL: ${QDRANT_LOG_LEVEL:-INFO}
+    # Loopback only, same reasoning as Mongo.
+    ports:
+      - '127.0.0.1:${QDRANT_PORT:-6333}:6333'
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      # The Qdrant image is distroless: no curl, no wget, no shell utilities.
+      # It does ship its own binary, which can perform the check.
+      test: ['CMD', '/qdrant/qdrant', '--version']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - itp-net
+
+  # ------------------------------------------------------------------------
+  # Express API - the only publicly exposed service
+  # ------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/backend.Dockerfile
+      target: production
+    container_name: itp-api
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 8080
+      API_PREFIX: ${API_PREFIX:-/api/v1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Service-name networking: "mongo" and "qdrant" resolve on itp-net.
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DB_NAME:-itp}?authSource=admin
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-itp}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      RAG_SERVICE_URL: http://rag-service:8000
+      RAG_API_PREFIX: ${RAG_API_PREFIX:-/internal/v1}
+      # Reaches the host-installed Ollama.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-5000}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in .env}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-15m}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN in .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:${WEB_PORT:-5173}}
+      REQUEST_BODY_LIMIT: ${REQUEST_BODY_LIMIT:-1mb}
+      HEALTH_CHECK_TIMEOUT_MS: ${HEALTH_CHECK_TIMEOUT_MS:-10000}
+      STORAGE_ROOT: /app/storage
+    volumes:
+      # Shared with the RAG service: Express receives uploads, FastAPI reads them.
+      - storage_data:/app/storage
+    ports:
+      - '${APP_PORT:-8080}:8080'
+    extra_hosts:
+      # Makes host.docker.internal work on Linux (already present on Mac/Windows).
+      - 'host.docker.internal:host-gateway'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - itp-net
+
+  # ------------------------------------------------------------------------
+  # FastAPI RAG service - internal only, never exposed to the browser
+  # ------------------------------------------------------------------------
+  rag-service:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/ai-service.Dockerfile
+      target: production
+    container_name: itp-rag
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_started
+    environment:
+      PYTHON_ENV: ${PYTHON_ENV:-production}
+      RAG_SERVICE_HOST: 0.0.0.0
+      RAG_SERVICE_PORT: 8000
+      RAG_API_PREFIX: ${RAG_API_PREFIX:-/internal/v1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-}
+      OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-5000}
+      # Least-privilege: only used to report job progress from Phase 3.
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongo:27017/${MONGO_DB_NAME:-itp}?authSource=admin
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-itp}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?set INTERNAL_SERVICE_TOKEN in .env}
+      STORAGE_ROOT: /app/storage
+    volumes:
+      - storage_data:/app/storage
+    # NO ports section. This service is reachable only from inside itp-net.
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=4).status==200 else 1)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - itp-net
+
+  # ------------------------------------------------------------------------
+  # Frontend - static build served by nginx, which also proxies /api
+  # ------------------------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/frontend.Dockerfile
+      target: production
+      args:
+        # Relative, so the browser calls nginx and nginx proxies to the API.
+        VITE_API_BASE_URL: ${API_PREFIX:-/api/v1}
+    container_name: itp-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - '${WEB_PORT:-5173}:80'
+    healthcheck:
+      test: ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://127.0.0.1/']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - itp-net
+
+# --------------------------------------------------------------------------
+# Named volumes - data survives `docker compose down`, removed by `down -v`
+# --------------------------------------------------------------------------
+volumes:
+  mongo_data:
+    name: itp_mongo_data
+  mongo_config:
+    name: itp_mongo_config
+  qdrant_data:
+    name: itp_qdrant_data
+  storage_data:
+    name: itp_storage_data
+
+networks:
+  itp-net:
+    name: itp-net
+    driver: bridge
