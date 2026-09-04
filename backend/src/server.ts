@@ -13,6 +13,7 @@ import { getLogger } from './core/logger.js';
 import { createApp } from './app.js';
 import { connectMongoSafely, disconnectMongo, getDb } from './db/mongo.js';
 import { prepareDatabase } from './database/bootstrap.js';
+import { resumeQueuedManualProcessing } from './modules/manuals/manual-processing.service.js';
 
 /** Grace period for in-flight requests before the socket is forced closed. */
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -131,6 +132,8 @@ async function main(): Promise<void> {
     if (db) {
       try {
         await prepareDatabase(db);
+        const resumed = await resumeQueuedManualProcessing(db);
+        if (resumed > 0) log.info({ resumed }, 'Queued manual processing jobs resumed');
       } catch (error) {
         log.error(
           { err: error instanceof Error ? error.message : String(error) },
