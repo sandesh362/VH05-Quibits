@@ -17,7 +17,8 @@ export default defineConfig(({ mode, command }) => {
     process.env.NODE_ENV = 'production';
   }
 
-  const proxyTarget = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080';
+  const apiPort = env.PORT || env.APP_PORT || '8080';
+  const proxyTarget = env.VITE_DEV_PROXY_TARGET || `http://localhost:${apiPort}`;
   const webPort = Number(env.WEB_PORT || 5173);
 
   return {

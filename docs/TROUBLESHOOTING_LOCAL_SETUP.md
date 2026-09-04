@@ -51,7 +51,7 @@ lsof -iTCP:8080 -sTCP:LISTEN     # macOS / Linux
 netstat -ano | findstr :8080     # Windows
 
 # Then either kill it, or change the port in .env:
-APP_PORT=8081
+APP_PORT=8080
 ```
 
 The same applies to 8000 (FastAPI), 5173 (frontend), 27017 (Mongo), 6333 (Qdrant).

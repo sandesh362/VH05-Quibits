@@ -15,10 +15,12 @@
   ],
   "scripts": {
     "build:shared": "npm run build --workspace @itp/shared",
-    "dev": "npm run services:up && npm run build:shared && concurrently -n api,ai,web -c cyan,yellow,magenta \"npm:dev:backend\" \"npm:dev:ai\" \"npm:dev:frontend\"",
+    "dev": "npm run services:up && npm run build:shared && concurrently -n api,ai,web -c cyan,yellow,magenta \"npm:dev:backend:runtime\" \"npm:dev:ai\" \"npm:dev:frontend:runtime\"",
     "dev:backend": "npm run dev --workspace @itp/backend",
-    "dev:ai": "node scripts/dev-ai.mjs",
+    "dev:backend:runtime": "npm run dev:runtime --workspace @itp/backend",
+    "dev:ai": "node --env-file=.env scripts/dev-ai.mjs",
     "dev:frontend": "npm run dev --workspace @itp/frontend",
+    "dev:frontend:runtime": "npm run dev:runtime --workspace @itp/frontend",
     "services:up": "docker compose up -d mongo qdrant",
     "build": "npm run build:shared && npm run build --workspace @itp/backend && npm run build --workspace @itp/frontend",
     "test": "npm run build:shared && npm run test --workspace @itp/backend && npm run test --workspace @itp/frontend",
@@ -40,6 +42,7 @@
     "create-admin": "npm run create-admin --workspace @itp/backend"
   },
   "devDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.34.8",
     "concurrently": "^9.1.2"
   }
 }
