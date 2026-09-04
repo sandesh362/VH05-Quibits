@@ -13,7 +13,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "create-admin": "tsx src/scripts/create-admin.ts"
+    "create-admin": "tsx src/scripts/create-admin.ts",
+    "seed:showcase": "tsx src/scripts/seed-showcase.ts",
+    "reprocess-manual": "tsx src/scripts/reprocess-manual.ts"
   },
   "dependencies": {
     "@itp/shared": "*",

@@ -13,6 +13,7 @@ Design:
 from __future__ import annotations
 
 import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ log = get_logger()
 # Render resolution for OCR. 200-300 dpi is the practical sweet spot for
 # printed industrial manuals caught by a scan.
 OCR_DPI = 240
+WINDOWS_TESSERACT = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
 
 
 @dataclass
@@ -37,8 +39,19 @@ class OcrPageResult:
 
 
 def tesseract_available() -> bool:
-    """Return True when the Tesseract executable is on PATH."""
-    return shutil.which("tesseract") is not None
+    """Return True when Tesseract is on PATH or at its standard Windows location."""
+    return shutil.which("tesseract") is not None or (
+        sys.platform == "win32" and WINDOWS_TESSERACT.is_file()
+    )
+
+
+def configure_tesseract() -> None:
+    """Point pytesseract at the Windows installer location when PATH is stale."""
+    if shutil.which("tesseract") is not None or not WINDOWS_TESSERACT.is_file():
+        return
+    import pytesseract
+
+    pytesseract.pytesseract.tesseract_cmd = str(WINDOWS_TESSERACT)
 
 
 def needs_ocr(pages: list[Any], min_characters: int) -> list[int]:
@@ -98,6 +111,7 @@ def ocr_page_image(image_bytes: bytes, language: str = "eng") -> tuple[str, floa
     from PIL import Image
 
     try:
+        configure_tesseract()
         img = Image.open(__import__("io").BytesIO(image_bytes))
         data = pytesseract.image_to_data(img, lang=language, output_type=pytesseract.Output.DICT)
     except Exception as exc:  # noqa: BLE001 - pytesseract can raise on missing lang

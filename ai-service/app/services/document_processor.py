@@ -125,7 +125,7 @@ async def process_manual(req: ProcessRequest, settings: Settings) -> dict[str, A
             # ocr_pages will raise SERVICE_UNAVAILABLE if Tesseract is missing;
             # that is an explicit, actionable failure rather than a silent
             # empty result that would later surface as "No meaningful text".
-            ocr_results = await ocr_pages(str(pdf_path), poor_pages, ocr_language)
+            ocr_results = ocr_pages(str(pdf_path), poor_pages, ocr_language)
             for page in pages:
                 if page.page_number in ocr_results:
                     ocr_entry = ocr_results[page.page_number]
