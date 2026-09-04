@@ -1,7 +1,7 @@
 {
   "name": "mobileapp",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "expo/AppEntry",
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
     "expo": "~54.0.34",
