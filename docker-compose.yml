@@ -103,7 +103,7 @@ services:
       RAG_API_PREFIX: ${RAG_API_PREFIX:-/internal/v1}
       # Reaches the host-installed Ollama.
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL_DOCKER:-http://host.docker.internal:11434}
-      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.1}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.2:3b}
       OLLAMA_EMBEDDING_MODEL: ${OLLAMA_EMBEDDING_MODEL:-nomic-embed-text}
       OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-5000}
       RAG_REQUEST_TIMEOUT_MS: ${RAG_REQUEST_TIMEOUT_MS:-120000}

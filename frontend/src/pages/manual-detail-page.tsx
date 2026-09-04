@@ -117,6 +117,7 @@ export function ManualDetailPage(): JSX.Element {
   const { manual, status, model } = data;
   const job = status.latestJob;
   const failed = manual.processingStatus !== 'completed' && (manual.failedAt !== null || manual.processingStatus.includes('failed'));
+  const canReprocess = can('manual.reprocess');
 
   return (
     <div className="page">
@@ -126,9 +127,9 @@ export function ManualDetailPage(): JSX.Element {
         description={manual.description ?? undefined}
         actions={
           <>
-            {failed && can('manual.reprocess') && (
+            {canReprocess && (
               <Button variant="primary" loading={busy} onClick={() => void reprocess()}>
-                Retry processing
+                {failed ? 'Retry processing' : 'Reindex manual'}
               </Button>
             )}
             {can('manual.delete') && (
@@ -161,6 +162,7 @@ export function ManualDetailPage(): JSX.Element {
         {manual.isSearchable ? (
           <Alert tone="ok">
             This manual is fully processed and its chunks are searchable in troubleshooting answers.
+            {canReprocess && ' Reindex it after changing the embedding model or if retrieval returns no results.'}
           </Alert>
         ) : failed ? (
           <Alert tone="error">

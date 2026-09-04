@@ -72,7 +72,10 @@ class Settings(BaseSettings):
     # -- Ollama --------------------------------------------------------------
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")
     # Empty until an operator pulls a model. Never assume one is installed.
-    OLLAMA_CHAT_MODEL: str = Field(default="llama3.1:3b")
+    # `llama3.1:3b` is not an Ollama tag and the installed 8B model exceeds
+    # this machine's available memory.  The installed 3B model is suitable
+    # for grounded local answers.
+    OLLAMA_CHAT_MODEL: str = Field(default="llama3.2:3b")
     OLLAMA_EMBEDDING_MODEL: str = Field(default="all-minilm")
     OLLAMA_TIMEOUT_MS: int = Field(default=120_000, ge=100, le=120_000)
 
@@ -82,7 +85,11 @@ class Settings(BaseSettings):
     RAG_REQUEST_TIMEOUT_MS: int = Field(default=120_000, ge=1000, le=300_000)
     RAG_TOP_K: int = Field(default=8, ge=1, le=50)
     RAG_MIN_CONTEXT_CHUNKS: int = Field(default=1, ge=1, le=20)
-    RAG_MIN_SEMANTIC_SCORE: float = Field(default=0.45, ge=0.0, le=1.0)
+    # all-minilm produces useful cosine scores around 0.25-0.35 for concise
+    # manual section queries (for example, "daily maintenance").  A 0.45
+    # threshold rejects those passages even when they are the best, correctly
+    # scoped results.  Citation/source checks still gate every answer.
+    RAG_MIN_SEMANTIC_SCORE: float = Field(default=0.25, ge=0.0, le=1.0)
     RAG_MIN_FINAL_SCORE: float = Field(default=0.45, ge=0.0, le=1.0)
     RAG_REQUIRE_SOURCE_METADATA: bool = Field(default=True)
     RAG_ALLOW_UNSUPPORTED_ANSWER: bool = Field(default=False)
