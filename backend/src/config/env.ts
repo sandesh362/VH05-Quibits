@@ -105,6 +105,25 @@ const envSchema = z
 
     // Storage
     STORAGE_ROOT: z.string().default('./storage'),
+    /** Max accepted manual PDF size, in megabytes. */
+    MAX_MANUAL_FILE_SIZE_MB: z.coerce.number().int().min(1).max(2048).default(100),
+    /** Where uploaded manual files live, relative to STORAGE_ROOT if relative. */
+    MANUAL_STORAGE_PATH: z.string().default('manuals'),
+
+    // Manual processing pipeline (reported / used to validate limits)
+    OCR_ENABLED: z
+      .string()
+      .optional()
+      .transform((v) => v === undefined || v === '' || v === 'true' || v === '1'),
+    OCR_LANGUAGE: z.string().default('eng'),
+    OCR_MIN_TEXT_CHARACTERS_PER_PAGE: z.coerce.number().int().min(1).max(100_000).default(50),
+    CHUNK_SIZE: z.coerce.number().int().min(100).max(100_000).default(1200),
+    CHUNK_OVERLAP: z.coerce.number().int().min(0).max(50_000).default(200),
+    MIN_CHUNK_SIZE: z.coerce.number().int().min(1).max(100_000).default(200),
+    MAX_CHUNK_SIZE: z.coerce.number().int().min(100).max(200_000).default(1800),
+    MANUAL_PROCESSING_TIMEOUT_MS: z.coerce.number().int().min(10_000).max(10_800_000).default(1_800_000),
+    /** Qdrant collection holding manual chunk vectors. */
+    QDRANT_MANUAL_COLLECTION: z.string().min(1).default('manual_chunks'),
 
     // Authentication (Phase 2 - now actively used)
     JWT_SECRET: secretSchema('JWT_SECRET'),
@@ -222,6 +241,21 @@ export interface AppConfig {
     readonly embeddingModel: string;
   };
   readonly storageRoot: string;
+  readonly manualMaxFileSizeMb: number;
+  readonly manualStoragePath: string;
+  readonly ocr: {
+    readonly enabled: boolean;
+    readonly language: string;
+    readonly minTextCharactersPerPage: number;
+  };
+  readonly chunking: {
+    readonly chunkSize: number;
+    readonly chunkOverlap: number;
+    readonly minChunkSize: number;
+    readonly maxChunkSize: number;
+  };
+  readonly manualProcessingTimeoutMs: number;
+  readonly qdrantManualCollection: string;
   readonly jwt: {
     readonly secret: string;
     readonly expiration: string;
@@ -308,6 +342,21 @@ export function parseConfig(source: NodeJS.ProcessEnv = process.env): AppConfig 
     storageRoot: path.isAbsolute(env.STORAGE_ROOT)
       ? env.STORAGE_ROOT
       : path.resolve(repoRoot, env.STORAGE_ROOT),
+    manualMaxFileSizeMb: env.MAX_MANUAL_FILE_SIZE_MB,
+    manualStoragePath: env.MANUAL_STORAGE_PATH,
+    ocr: {
+      enabled: env.OCR_ENABLED,
+      language: env.OCR_LANGUAGE,
+      minTextCharactersPerPage: env.OCR_MIN_TEXT_CHARACTERS_PER_PAGE,
+    },
+    chunking: {
+      chunkSize: env.CHUNK_SIZE,
+      chunkOverlap: env.CHUNK_OVERLAP,
+      minChunkSize: env.MIN_CHUNK_SIZE,
+      maxChunkSize: env.MAX_CHUNK_SIZE,
+    },
+    manualProcessingTimeoutMs: env.MANUAL_PROCESSING_TIMEOUT_MS,
+    qdrantManualCollection: env.QDRANT_MANUAL_COLLECTION,
     jwt: {
       secret: env.JWT_SECRET,
       expiration: env.JWT_EXPIRATION,

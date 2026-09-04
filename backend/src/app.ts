@@ -17,6 +17,7 @@ import { authRoutes, userRoutes } from './modules/auth/auth.routes.js';
 import { machineModelRoutes } from './modules/machine-models/machine-models.routes.js';
 import { machineRoutes } from './modules/machines/machines.routes.js';
 import { manualRoutes } from './modules/manuals/manuals.routes.js';
+import { manualProcessingJobRoutes } from './modules/manuals/manual-processing-jobs.routes.js';
 import { incidentRoutes } from './modules/incidents/incidents.routes.js';
 import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
 import { conversationRoutes } from './modules/conversations/conversations.routes.js';
@@ -80,6 +81,7 @@ export function createApp(): Express {
   api.use(machineModelRoutes());
   api.use(machineRoutes());
   api.use(manualRoutes());
+  api.use(manualProcessingJobRoutes());
   api.use(incidentRoutes());
   api.use(maintenanceRoutes());
   api.use(conversationRoutes());

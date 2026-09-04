@@ -7,6 +7,7 @@
  *  - unexpected errors are logged in full but reported generically
  */
 import type { NextFunction, Request, Response } from 'express';
+import multer from 'multer';
 import { ApiError, failureEnvelope } from '../core/api-error.js';
 import { getConfig } from '../config/env.js';
 
@@ -24,6 +25,20 @@ export function notFoundHandler() {
 /** Normalise anything thrown into an ApiError. */
 function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err;
+
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return new ApiError('PAYLOAD_TOO_LARGE', 'The uploaded file exceeds the size limit.', {
+        cause: err,
+      });
+    }
+    if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+      return new ApiError('VALIDATION_ERROR', 'Only a single file named "file" is accepted.', {
+        cause: err,
+      });
+    }
+    return new ApiError('VALIDATION_ERROR', `Upload rejected: ${err.code}.`, { cause: err });
+  }
 
   if (err instanceof SyntaxError && 'body' in err) {
     // express.json() parse failure

@@ -143,16 +143,49 @@ export async function ensureIndexes(db: Db): Promise<IndexReport[]> {
   const jobIndexes = await collections.manualProcessingJobs(db).createIndexes([
     { key: { manual_id: 1, created_at: -1 }, name: 'manual_recent' },
     { key: { status: 1, created_at: -1 }, name: 'status_recent' },
-    // Prevents two concurrent active jobs of the same type for one manual.
-    // Partial on the ACTIVE statuses only, so history is unconstrained.
     {
-      key: { manual_id: 1, job_type: 1 },
-      name: 'uniq_active_job',
+      key: { machine_model_id: 1, status: 1, created_at: -1 },
+      name: 'model_status_recent',
+      sparse: true,
+    },
+    { key: { triggered_by: 1, created_at: -1 }, name: 'triggered_recent', sparse: true },
+    // Prevents two concurrent ACTIVE (queued/running) jobs for one manual of
+    // any job_type. This is what makes reprocessing requests serialisable: the
+    // database refuses a second live job rather than racing two pipelines.
+    // Partial on the ACTIVE statuses only, so completed/failed history is
+    // unconstrained.
+    {
+      key: { manual_id: 1 },
+      name: 'uniq_active_job_per_manual',
       unique: true,
       partialFilterExpression: { status: { $in: ['queued', 'running'] } },
     },
   ]);
   report.push({ collection: 'manual_processing_jobs', created: jobIndexes });
+
+  // -------------------------------------------------------------------------
+  // manual_pages  (page-level extracted text)
+  // -------------------------------------------------------------------------
+  const pageIndexes = await collections.manualPages(db).createIndexes([
+    // One page per manual, exact page order.
+    { key: { manual_id: 1, page_number: 1 }, name: 'uniq_manual_page', unique: true },
+    { key: { manual_id: 1 }, name: 'by_manual' },
+  ]);
+  report.push({ collection: 'manual_pages', created: pageIndexes });
+
+  // -------------------------------------------------------------------------
+  // manual_chunks  (retrieval unit; Mongo authoritative over Qdrant)
+  // -------------------------------------------------------------------------
+  const chunkIndexes = await collections.manualChunks(db).createIndexes([
+    // One chunk index per manual; a retry overwrites rather than duplicates.
+    { key: { manual_id: 1, chunk_index: 1 }, name: 'uniq_manual_chunk', unique: true },
+    { key: { manual_id: 1 }, name: 'by_manual' },
+    { key: { machine_model_id: 1, indexing_status: 1 }, name: 'model_index_status' },
+    { key: { content_hash: 1 }, name: 'content_hash' },
+    { key: { qdrant_point_id: 1 }, name: 'qdrant_point', sparse: true },
+    { key: { indexing_status: 1 }, name: 'index_status' },
+  ]);
+  report.push({ collection: 'manual_chunks', created: chunkIndexes });
 
   // -------------------------------------------------------------------------
   // conversations / messages

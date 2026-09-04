@@ -97,14 +97,24 @@ class TestSystemInfoEndpoint:
         assert response.status_code == 200
         data = response.json()["data"]
         assert data["service"] == "rag-service"
-        assert "Phase 1" in data["phase"]
+        assert "Phase 3" in data["phase"]
         assert data["pythonVersion"]
 
-    def test_all_features_disabled_in_phase_1(self, client: TestClient, api_prefix: str) -> None:
-        """Guards against a future phase shipping a half-built feature flag."""
+    def test_phase_3_enabled_but_rag_still_disabled(
+        self, client: TestClient, api_prefix: str
+    ) -> None:
+        """Phase 3 ships the ingestion pipeline; retrieval/RAG must stay False."""
         data = client.get(f"{api_prefix}/system/info").json()["data"]
-        for name, enabled in data["features"].items():
-            assert enabled is False, f'feature "{name}" must be False in Phase 1'
+        features = data["features"]
+        # Enabled in Phase 3.
+        assert features["pdf_extraction"] is True
+        assert features["ocr"] is True
+        assert features["chunking"] is True
+        assert features["embeddings"] is True
+        assert features["vector_indexing"] is True
+        # NOT yet implemented (Phase 4/5).
+        for name in ("retrieval", "rag_answers", "citation_validation"):
+            assert features[name] is False, f'feature "{name}" must be False in Phase 3'
 
     def test_does_not_leak_urls_or_credentials(
         self, client: TestClient, api_prefix: str

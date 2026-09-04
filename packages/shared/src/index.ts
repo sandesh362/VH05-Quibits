@@ -217,6 +217,24 @@ export const PHASE_2_FEATURES: SystemFeatureFlags = {
   maintenanceHistory: false,
 };
 
+/**
+ * Phase 3: manual upload, PDF processing, OCR, chunking and local embeddings
+ * exist. Qdrant vectors are indexed but no search/retrieval or RAG answer
+ * endpoint exists yet (that is Phase 4/5) - so `vectorSearch` and `ragAnswers`
+ * stay false. `maintenanceHistory` reflects the Phase 2 data layer.
+ */
+export const PHASE_3_FEATURES: SystemFeatureFlags = {
+  authentication: true,
+  manualUpload: true,
+  documentProcessing: true,
+  ocr: true,
+  embeddings: true,
+  vectorSearch: false,
+  ragAnswers: false,
+  incidentMemory: false,
+  maintenanceHistory: true,
+};
+
 // ---------------------------------------------------------------------------
 // Roles and authorization (Phase 2)
 // ---------------------------------------------------------------------------
@@ -232,7 +250,8 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const CAPABILITIES = [
   'machine_model.read', 'machine_model.create', 'machine_model.update', 'machine_model.delete',
   'machine.read', 'machine.create', 'machine.update', 'machine.delete',
-  'manual.read', 'manual.create', 'manual.update', 'manual.delete',
+  'manual.read', 'manual.create', 'manual.update', 'manual.delete', 'manual.reprocess',
+  'manual_processing_job.read', 'manual_page.read', 'manual_chunk.read',
   'incident.read', 'incident.create', 'incident.update_any', 'incident.update_own',
   'incident.confirm_resolution', 'incident.reopen',
   'incident_action.create', 'incident_action.read',
@@ -268,8 +287,29 @@ export const DOCUMENT_TYPES = [
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
-/** Set by the processing pipeline (Phase 3+), never by a metadata endpoint. */
-export const PROCESSING_STATUSES = ['queued', 'processing', 'ready', 'failed', 'cancelled'] as const;
+/**
+ * Set by the processing pipeline (Phase 3+), never by a metadata endpoint.
+ *
+ * The fine-grained `extracting_text` ... `indexing` states are reported while
+ * a job is running so the UI can show the current stage. `uploaded` is the
+ * state before a job is created; `completed` is the only terminal success
+ * state (a manual is NOT `completed` unless extraction, OCR-if-needed,
+ * cleaning, chunking, embedding AND indexing all succeeded).
+ */
+export const PROCESSING_STATUSES = [
+  'uploaded',
+  'queued',
+  'processing',
+  'extracting_text',
+  'ocr_processing',
+  'cleaning_text',
+  'chunking',
+  'embedding',
+  'indexing',
+  'completed',
+  'failed',
+  'cancelled',
+] as const;
 export type ProcessingStatus = (typeof PROCESSING_STATUSES)[number];
 
 export const JOB_TYPES = [
@@ -366,6 +406,89 @@ export interface AuthTokens {
 
 export interface LoginResponse extends AuthTokens {
   user: PublicUser;
+}
+
+// ---------------------------------------------------------------------------
+// Manual processing domain (Phase 3)
+// ---------------------------------------------------------------------------
+
+/** A stage entry inside a manual processing job. */
+export interface ManualProcessingStage {
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+  startedAt: string | null;
+  endedAt: string | null;
+  progress?: { current: number; total: number; unit: string } | null;
+  warnings?: string[];
+}
+
+/** A manual processing job as returned over the API. */
+export interface ManualProcessingJobView {
+  id: string;
+  manualId: string;
+  jobType: JobType;
+  status: JobStatus;
+  currentStage: string | null;
+  stages: ManualProcessingStage[];
+  progressPercent: number;
+  attempt: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  triggeredBy: string | null;
+  machineModelId: string | null;
+  totalPages: number | null;
+  processedPages: number;
+  totalChunks: number | null;
+  processedChunks: number;
+  extractionMethod: string | null;
+  ocrUsed: boolean;
+  embeddingModel: string | null;
+  embeddingDimension: number | null;
+  retryCount: number;
+  startedAt: string | null;
+  completedAt: string | null;
+  failedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A processed manual page (extracted text, not the raw PDF page image). */
+export interface ManualPageView {
+  id: string;
+  manualId: string;
+  pageNumber: number;
+  rawText: string;
+  cleanedText: string;
+  characterCount: number;
+  wordCount: number;
+  hasText: boolean;
+  extractionMethod: string;
+  ocrUsed: boolean;
+  ocrConfidence: number | null;
+}
+
+/** A manual chunk (the retrieval unit). */
+export interface ManualChunkView {
+  id: string;
+  manualId: string;
+  machineModelId: string | null;
+  machineId: string | null;
+  chunkIndex: number;
+  pageStart: number;
+  pageEnd: number;
+  sectionTitle: string | null;
+  sectionPath: string[] | null;
+  text: string;
+  normalizedText: string;
+  characterCount: number;
+  wordCount: number;
+  contentHash: string;
+  embeddingModel: string | null;
+  embeddingDimension: number | null;
+  qdrantPointId: string | null;
+  indexingStatus: 'pending' | 'embedded' | 'indexed';
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ---------------------------------------------------------------------------

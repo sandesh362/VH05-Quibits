@@ -38,8 +38,11 @@ ENV PATH="/opt/venv/bin:$PATH" \
     RAG_SERVICE_PORT=8000
 
 # tini gives PID 1 proper signal handling for graceful shutdown.
+# Tesseract is required for the OCR fallback in Phase 3 (scanned PDFs). The
+# language pack for `ocr` is installed so OCR_LANGUAGE=eng works out of the box.
+# Ghostscript is pulled by PyMuPDF's rendering path for some PDF types.
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends tini \
+  && apt-get install -y --no-install-recommends tini tesseract-ocr tesseract-ocr-eng \
   && rm -rf /var/lib/apt/lists/* \
   && useradd --create-home --uid 1001 appuser
 
