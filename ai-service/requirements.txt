@@ -4,6 +4,9 @@
 # Install:  pip install -r requirements.txt
 # Dev:      pip install -r requirements-dev.txt
 #
+# NOTE: PDF/OCR/embedding libraries (pymupdf, ocrmypdf, qdrant-client) are
+# deliberately absent. They arrive in Phase 3/4 with the code that uses them.
+
 fastapi>=0.115.0,<0.116.0
 uvicorn[standard]>=0.32.0,<0.35.0
 pydantic>=2.9.0,<3.0.0
@@ -12,10 +15,6 @@ httpx>=0.27.0,<0.29.0
 motor>=3.6.0,<4.0.0
 structlog>=24.4.0,<25.0.0
 python-dotenv>=1.0.1,<2.0.0
-PyMuPDF>=1.24.0,<2.0.0
-pillow>=10.0.0,<12.0.0
-pytesseract>=0.3.13,<0.4.0
-qdrant-client>=1.9.0,<2.0.0
 
 # Phase 3: PDF processing, local OCR, embeddings and the local vector index.
 PyMuPDF>=1.24.0,<2.0.0

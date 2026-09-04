@@ -10,8 +10,9 @@ export function ConversationNewPage(): JSX.Element {
   const navigate = useNavigate();
   const machines = useApi(() => apiClient.listMachines().then((r) => r.data));
   const models = useApi(() => apiClient.listModels().then((r) => r.data));
+  const presetMachine = new URLSearchParams(window.location.search).get('machineId') ?? '';
   const [title, setTitle] = useState('');
-  const [machineId, setMachineId] = useState('');
+  const [machineId, setMachineId] = useState(presetMachine);
   const [machineModelId, setMachineModelId] = useState('');
   const [manualId, setManualId] = useState('');
   const [issueSummary, setIssueSummary] = useState('');
@@ -23,7 +24,7 @@ export function ConversationNewPage(): JSX.Element {
   const selectedMachine = machines.data?.find((m) => m.id === machineId);
   const effectiveModelId = selectedMachine?.machineModelId || machineModelId;
   const manuals = useApi(
-    () => apiClient.listManuals(effectiveModelId || undefined).then((r) => r.data),
+    () => apiClient.listManuals(effectiveModelId ? { machineModelId: effectiveModelId } : undefined).then((r) => r.data),
     [effectiveModelId],
   );
 

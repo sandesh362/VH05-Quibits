@@ -64,10 +64,23 @@ export function isPdfExtension(filename: string): boolean {
  * Verify magic bytes. A `%PDF-` header is the strongest cheap signal; the
  * MIME type and extension are untrusted anyway. Content-Disposition / sniffing
  * would be more elaborate than this phase needs.
+ *
+ * Some PDF producers (especially compressed/linearized manuals) may prepend a
+ * BOM or whitespace before the header.  We scan the first 1 KiB for the
+ * signature rather than requiring it at byte 0, so such files are not
+ * rejected before the pipeline can even attempt extraction.
  */
 export function hasPdfMagicBytes(buffer: Buffer): boolean {
+  // Fast path – most PDFs start with %PDF- at offset 0.
   const head = buffer.subarray(0, 5).toString('latin1');
-  return head.startsWith('%PDF-');
+  if (head.startsWith('%PDF-')) return true;
+  // Slow path – scan the first 1 KiB for the signature (handles BOM,
+  // leading whitespace, or a UTF-8 BOM from some Windows tools).
+  const scanLen = Math.min(buffer.length, 1024);
+  const snippet = buffer.subarray(0, scanLen).toString('latin1');
+  // Strip leading BOM / whitespace and look for %PDF-
+  const trimmed = snippet.replace(/^\uFEFF/, '').trimStart();
+  return trimmed.startsWith('%PDF-') || snippet.includes('%PDF-');
 }
 
 /**

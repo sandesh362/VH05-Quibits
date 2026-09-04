@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ConversationDetailPage } from './conversation-detail-page';
 import { AuthProvider } from '../lib/auth';
+import { ToastProvider } from '../lib/toast';
 import { apiClient, ApiClientError, type MessageRecord } from '../lib/api-client';
 
 const conversation = {
@@ -82,9 +83,11 @@ function renderDetail(): void {
   render(
     <MemoryRouter initialEntries={['/conversations/c1']}>
       <AuthProvider>
-        <Routes>
-          <Route path="/conversations/:id" element={<ConversationDetailPage />} />
-        </Routes>
+        <ToastProvider>
+          <Routes>
+            <Route path="/conversations/:id" element={<ConversationDetailPage />} />
+          </Routes>
+        </ToastProvider>
       </AuthProvider>
     </MemoryRouter>,
   );

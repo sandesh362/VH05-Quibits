@@ -46,7 +46,7 @@ _NUMBERED = re.compile(r"^\s*\d+(\.\d+)+\s+[A-Za-z]")
 def clean_text(raw: str) -> str:
     """Normalise extracted text.
 
-    - line endings -> \n
+    - line endings -> \\n
     - zero-width / control chars stripped
     - spaces collapsed to a single space
     - blank-line runs collapsed to at most one blank line
@@ -56,7 +56,7 @@ def clean_text(raw: str) -> str:
         return ""
 
     text = raw.replace("\r\n", "\n").replace("\r", "\n")
-    # Strip non-printable control characters (keep \n, \t).
+    # Strip non-printable control characters (keep \\n, \\t).
     text = "".join(ch if ch == "\n" or ch == "\t" or ch > "\x1f" else " " for ch in text)
     # Tabs to a single space.
     text = text.replace("\t", " ")
@@ -69,6 +69,14 @@ def clean_text(raw: str) -> str:
     # trim the ends.
     lines = [line.strip() for line in text.split("\n")]
     cleaned = "\n".join(lines).strip()
+    # Fallback: if cleaning collapses to empty but raw had visible content
+    # (e.g. PDFs with compressed streams that decode to unusual whitespace),
+    # preserve a whitespace-normalised version so the document is not treated
+    # as empty.
+    if not cleaned and raw.strip():
+        fallback = re.sub(r"\s+", " ", raw).strip()
+        if fallback:
+            return fallback
     return cleaned
 
 
@@ -126,7 +134,7 @@ def _heading_level(stripped: str) -> int:
 def detect_headings(text: str) -> list[Heading]:
     """Return best-effort headings in document order.
 
-    `line_index` is the index into `text.split('\n')` so the chunker can attach
+    `line_index` is the index into `text.split('\\n')` so the chunker can attach
     the nearest preceding heading to a chunk.
     """
     lines = text.split("\n")

@@ -11,6 +11,8 @@ import { ErrorState, LoadingState } from '../components/states';
 import { StatusBadge } from '../components/status-badge';
 import { CitationPreview } from '../components/citation-preview';
 import { RetrievalTrace } from '../components/retrieval-trace';
+import { Button, ConfirmDialog, DropdownMenu, Field, Modal, TextInput } from '../components/ui';
+import { useToast } from '../lib/toast';
 import './page.css';
 import './chat.css';
 
@@ -70,6 +72,10 @@ export function ConversationDetailPage(): JSX.Element {
   const [closeNote, setCloseNote] = useState('');
   const [creatingIncident, setCreatingIncident] = useState(false);
   const [incidentError, setIncidentError] = useState<string | null>(null);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameSaving, setRenameSaving] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const conversationQuery = useApi(
@@ -188,6 +194,55 @@ export function ConversationDetailPage(): JSX.Element {
     }
   }
 
+  const toast = useToast();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  function openRename(): void {
+    setRenameValue(conversation?.title ?? '');
+    setManageError(null);
+    setRenameOpen(true);
+  }
+
+  async function saveRename(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    setRenameSaving(true);
+    setManageError(null);
+    try {
+      await apiClient.updateConversation(conversationId, { title: renameValue.trim() || 'Untitled conversation' });
+      toast.success('Conversation renamed.');
+      setRenameOpen(false);
+      conversationQuery.refetch();
+    } catch (caught) {
+      setManageError(caught instanceof ApiClientError ? caught.message : 'Could not rename.');
+    } finally {
+      setRenameSaving(false);
+    }
+  }
+
+  async function archiveConversation(): Promise<void> {
+    try {
+      await apiClient.archiveConversation(conversationId);
+      toast.success('Conversation archived.');
+      navigate('/conversations');
+    } catch (caught) {
+      toast.error(caught instanceof ApiClientError ? caught.message : 'Could not archive.');
+    }
+  }
+
+  async function deleteConversation(): Promise<void> {
+    setDeleting(true);
+    try {
+      await apiClient.deleteConversation(conversationId);
+      toast.success('Conversation deleted.');
+      navigate('/conversations');
+    } catch (caught) {
+      toast.error(caught instanceof ApiClientError ? caught.message : 'Could not delete.');
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
   if (conversationQuery.isInitialLoading) return <LoadingState message="Loading conversation…" />;
   if (conversationQuery.error) {
     return <ErrorState error={conversationQuery.error} onRetry={conversationQuery.refetch} />;
@@ -200,7 +255,19 @@ export function ConversationDetailPage(): JSX.Element {
         <p className="crumb">
           <Link to="/conversations">Conversations</Link>
         </p>
-        <h1>{conversation.title || 'Untitled conversation'}</h1>
+        <div className="conversation-title-row">
+          <h1>{conversation.title || 'Untitled conversation'}</h1>
+          <DropdownMenu
+            label={<span aria-label="Conversation actions">⋮ Actions</span>}
+            items={[
+              { node: 'Rename', onSelect: openRename },
+              conversation.status !== 'archived'
+                ? { node: 'Archive', onSelect: () => void archiveConversation(), disabled: !active }
+                : { node: 'Archived', disabled: true },
+              { node: 'Delete', danger: true, onSelect: () => setConfirmDelete(true) },
+            ]}
+          />
+        </div>
         <p className="page__lead">{conversation.issueSummary || 'No issue summary recorded.'}</p>
         <div className="chat-meta">
           <StatusBadge status={conversation.status === 'active' ? 'ok' : 'disabled'} label={conversation.status} />
@@ -446,6 +513,46 @@ export function ConversationDetailPage(): JSX.Element {
 
       {source && <CitationPreview source={source} onClose={() => setSource(null)} />}
       {traceMessage && <RetrievalTrace message={traceMessage} onClose={() => setTraceMessage(null)} />}
+
+      <Modal
+        open={renameOpen}
+        onClose={() => setRenameOpen(false)}
+        title="Rename conversation"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRenameOpen(false)} disabled={renameSaving}>Cancel</Button>
+            <Button variant="primary" type="submit" form="rename-form" loading={renameSaving}>Save</Button>
+          </>
+        }
+      >
+        <form id="rename-form" className="ui-form" onSubmit={saveRename}>
+          {manageError && <p className="form-errors" role="alert">{manageError}</p>}
+          <Field label="Title" htmlFor="rename-title">
+            <TextInput
+              id="rename-title"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              autoFocus
+            />
+          </Field>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => void deleteConversation()}
+        title="Delete this conversation?"
+        confirmLabel="Delete conversation"
+        loading={deleting}
+        irreversible
+      >
+        <p>
+          This permanently removes the conversation and its messages. Incident records created
+          from it are not deleted. This cannot be undone.
+        </p>
+      </ConfirmDialog>
     </div>
   );
 }

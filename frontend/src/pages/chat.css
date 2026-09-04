@@ -473,3 +473,12 @@
   padding: 1px 5px;
   border-radius: 4px;
 }
+
+/* Phase 9: conversation management */
+.conversation-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
