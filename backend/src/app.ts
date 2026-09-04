@@ -20,6 +20,7 @@ import { manualRoutes } from './modules/manuals/manuals.routes.js';
 import { manualProcessingJobRoutes } from './modules/manuals/manual-processing-jobs.routes.js';
 import { incidentRoutes } from './modules/incidents/incidents.routes.js';
 import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
+import { timelineRoutes } from './modules/timeline/timeline.routes.js';
 import { conversationRoutes } from './modules/conversations/conversations.routes.js';
 import { ragRoutes } from './modules/rag/rag.routes.js';
 
@@ -85,6 +86,7 @@ export function createApp(): Express {
   api.use(manualProcessingJobRoutes());
   api.use(incidentRoutes());
   api.use(maintenanceRoutes());
+  api.use(timelineRoutes());
   api.use(conversationRoutes());
   api.use(ragRoutes());
 

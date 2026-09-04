@@ -31,16 +31,16 @@ const TECHNICIAN: Capability[] = [
   'incident.create',
   'incident.update_own',
   /**
-   * Technicians hold this capability, but holding it is not sufficient.
-   * `canConfirmResolution()` then requires that the incident is one they
-   * reported or were assigned, and that INCIDENT_CONFIRMATION_MODE is 'self'.
-   * In 'supervisor' mode the service refuses them regardless.
-   *
-   * The capability gate cannot express "own incident only", so the route lets
-   * them through and the service makes the real decision. See DATA_MODEL 13.4.
+   * Technicians may update root-cause text/status to `suspected`, record
+   * fixes, and record actions. Confirmation of outcomes, fixes, root causes
+   * and closure is resolved in the service by ownership + policy - the route
+   * lets technicians through and the service makes the real decision, exactly
+   * like the Phase 5 resolution flow.
    */
-  'incident.confirm_resolution',
+  'incident.root_cause_update',
+  'incident.fix_record',
   'incident_action.create',
+  'incident_action.update',
   'maintenance.create',
   'maintenance.update_own',
   'conversation.create',
@@ -60,7 +60,14 @@ const MANAGER: Capability[] = [
   'manual.delete',
   'manual.reprocess',
   'incident.update_any',
+  'incident.assign',
+  'incident.root_cause_confirm',
+  'incident.root_cause_reject',
+  'incident.fix_confirm',
+  'incident_action.confirm',
+  'incident.close',
   'incident.reopen',
+  'incident.reindex',
   'maintenance.update_any',
   'conversation.read_any',
   'user.read_all',
@@ -72,6 +79,7 @@ const ADMIN: Capability[] = [
   ...MANAGER,
   'machine_model.delete',
   'machine.delete',
+  'incident.delete',
   'user.create',
   'user.update_role',
 ];

@@ -206,8 +206,30 @@ class SourceRef:
     section_title: str | None
     machine_model_id: str | None = None
     excerpt: str | None = None
+    source_type: Literal["manual", "incident", "maintenance"] = "manual"
+    # Incident-source fields (source_type == "incident")
+    incident_number: str | None = None
+    incident_resolved_at: str | None = None
+    # Maintenance-source fields (source_type == "maintenance")
+    maintenance_id: str | None = None
+    days_before_incident: int | None = None
+    correlation_strength: str | None = None
+    causal_claim: bool = False
+    noted_by_manual: bool = False
+    noted_by_manual_source_id: str | None = None
 
     def citation_label(self) -> str:
+        if self.source_type == "incident":
+            label = f"HISTORICAL INCIDENT {self.incident_number or self.chunk_id}"
+            if self.incident_resolved_at:
+                label += f" ({self.incident_resolved_at[:10]})"
+            return f"[{label} — historical context]"
+        if self.source_type == "maintenance":
+            when = f", {self.days_before_incident} days before" if self.days_before_incident is not None else ""
+            return (
+                f"[MAINTENANCE {self.section_title or self.chunk_id}{when}"
+                " — non-causal context]"
+            )
         version = f", version {self.manual_version}" if self.manual_version else ""
         if self.page_start == self.page_end:
             pages = f"p. {self.page_start}"
@@ -227,10 +249,145 @@ class SourceRef:
             "page_end": self.page_end,
             "section_title": self.section_title,
             "machine_model_id": self.machine_model_id,
+            "source_type": self.source_type,
         }
+        if self.source_type == "incident":
+            payload["incident_number"] = self.incident_number
+            payload["incident_resolved_at"] = self.incident_resolved_at
+        if self.source_type == "maintenance":
+            payload["maintenance_id"] = self.maintenance_id
+            payload["days_before_incident"] = self.days_before_incident
+            payload["correlation_strength"] = self.correlation_strength
+            payload["causal_claim"] = self.causal_claim
+            payload["noted_by_manual"] = self.noted_by_manual
+            payload["noted_by_manual_source_id"] = self.noted_by_manual_source_id
         if self.excerpt:
             payload["excerpt"] = self.excerpt
         return payload
+
+
+@dataclass
+class HistoricalIncident:
+    """A past incident retrieved as SUPPLEMENTARY evidence. Never authoritative."""
+
+    incident_id: str
+    organization_id: str
+    machine_id: str | None
+    machine_model_id: str | None
+    incident_number: str
+    title: str
+    status: str
+    issue_status: str
+    severity: str
+    error_codes: list[str]
+    symptoms: list[str]
+    operating_conditions: list[str]
+    root_cause_status: str
+    confirmed_root_cause: str | None
+    confirmed_fix: str | None
+    resolution_summary: str | None
+    resolved_at: str | None
+    created_at: str
+    qdrant_point_id: str | None = None
+
+    @property
+    def confirmed(self) -> bool:
+        return bool(self.confirmed_root_cause and self.confirmed_fix)
+
+    def to_public_dict(self, *, include_text: bool = True) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "incident_id": self.incident_id,
+            "organization_id": self.organization_id,
+            "machine_id": self.machine_id,
+            "machine_model_id": self.machine_model_id,
+            "incident_number": self.incident_number,
+            "title": self.title,
+            "status": self.status,
+            "issue_status": self.issue_status,
+            "severity": self.severity,
+            "error_codes": self.error_codes,
+            "symptoms": self.symptoms,
+            "root_cause_status": self.root_cause_status,
+            "confirmed_root_cause": self.confirmed_root_cause,
+            "confirmed_fix": self.confirmed_fix,
+            "resolution_summary": self.resolution_summary,
+            "resolved_at": self.resolved_at,
+            "created_at": self.created_at,
+            "confirmed": self.confirmed,
+        }
+        if include_text:
+            payload["operating_conditions"] = self.operating_conditions
+        return payload
+
+
+@dataclass
+class HistoricalIncidentHit:
+    """A ranked historical incident with similarity reasons."""
+
+    incident: HistoricalIncident
+    score: float
+    reasons: list[str]
+    semantic_score: float | None = None
+    exact_error_code: bool = False
+    same_machine: bool = False
+    same_model: bool = False
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "incident": self.incident.to_public_dict(),
+            "score": round(self.score, 4),
+            "reasons": self.reasons,
+            "semantic_score": (
+                round(self.semantic_score, 4) if self.semantic_score is not None else None
+            ),
+            "exact_error_code": self.exact_error_code,
+            "same_machine": self.same_machine,
+            "same_model": self.same_model,
+            "confirmed": self.incident.confirmed,
+        }
+
+
+class IncidentStore(Protocol):
+    """Read-only access to incident metadata (Mongo). Express owns writes."""
+
+    async def find_incidents_by_ids(self, incident_ids: list[str]) -> list[HistoricalIncident]: ...
+
+    async def find_exact_error_code_matches(
+        self,
+        *,
+        organization_id: str,
+        machine_model_id: str,
+        error_codes: list[str],
+        exclude_incident_id: str | None,
+        limit: int,
+    ) -> list[HistoricalIncident]: ...
+
+
+class IncidentVectorIndex(Protocol):
+    """Incident Qdrant operations (separate collection from manual chunks)."""
+
+    async def ensure_collection(self, dimension: int) -> None: ...
+
+    async def upsert_incident(
+        self,
+        incident: HistoricalIncident,
+        vector: list[float],
+        *,
+        embedding_model: str,
+    ) -> str: ...
+
+    async def delete_incident(self, incident_id: str) -> bool: ...
+
+    async def search(
+        self,
+        vector: list[float],
+        *,
+        organization_id: str,
+        machine_model_id: str | None,
+        exclude_incident_id: str | None,
+        limit: int,
+        embedding_model: str,
+    ) -> list[tuple[HistoricalIncident, float]]: ...
 
 
 @dataclass

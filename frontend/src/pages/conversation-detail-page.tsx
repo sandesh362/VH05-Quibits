@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   apiClient,
   ApiClientError,
@@ -9,6 +9,8 @@ import {
 import { useApi } from '../lib/use-api';
 import { ErrorState, LoadingState } from '../components/states';
 import { StatusBadge } from '../components/status-badge';
+import { CitationPreview } from '../components/citation-preview';
+import { RetrievalTrace } from '../components/retrieval-trace';
 import './page.css';
 import './chat.css';
 
@@ -50,6 +52,7 @@ function ragLabel(status: string | null): string {
 
 export function ConversationDetailPage(): JSX.Element {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const conversationId = id ?? '';
   const [messages, setMessages] = useState<MessageRecord[]>([]);
   const [actions, setActions] = useState<TechnicianActionRecord[]>([]);
@@ -58,12 +61,15 @@ export function ConversationDetailPage(): JSX.Element {
   const [sendError, setSendError] = useState<string | null>(null);
   const [retryContent, setRetryContent] = useState<string | null>(null);
   const [source, setSource] = useState<MessageRecord['sources'][number] | null>(null);
+  const [traceMessage, setTraceMessage] = useState<MessageRecord | null>(null);
   const [issueStatus, setIssueStatus] = useState('');
   const [confirmationNote, setConfirmationNote] = useState('');
   const [actionText, setActionText] = useState('');
   const [actionResult, setActionResult] = useState('');
   const [actionStatus, setActionStatus] = useState('completed');
   const [closeNote, setCloseNote] = useState('');
+  const [creatingIncident, setCreatingIncident] = useState(false);
+  const [incidentError, setIncidentError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const conversationQuery = useApi(
@@ -170,6 +176,18 @@ export function ConversationDetailPage(): JSX.Element {
     conversationQuery.refetch();
   }
 
+  async function onCreateIncident(): Promise<void> {
+    setCreatingIncident(true);
+    setIncidentError(null);
+    try {
+      const result = await apiClient.createIncidentFromConversation(conversationId, {});
+      navigate(`/incidents/${result.incident.id}`);
+    } catch (caught) {
+      setIncidentError(caught instanceof ApiClientError ? caught.message : 'Could not create the incident.');
+      setCreatingIncident(false);
+    }
+  }
+
   if (conversationQuery.isInitialLoading) return <LoadingState message="Loading conversation…" />;
   if (conversationQuery.error) {
     return <ErrorState error={conversationQuery.error} onRetry={conversationQuery.refetch} />;
@@ -195,7 +213,54 @@ export function ConversationDetailPage(): JSX.Element {
             </span>
           )}
         </div>
+        <div className="conversation-incident-actions">
+          {conversation.incidentIds.length > 0 ? (
+            <p className="page__note">
+              Incident report:{' '}
+              {conversation.incidentIds.map((incidentId, index) => (
+                <span key={incidentId}>
+                  {index > 0 && ', '}
+                  <Link to={`/incidents/${incidentId}`}>{incidentId.slice(-6)}</Link>
+                </span>
+              ))}
+            </p>
+          ) : (
+            <div className="field-row">
+              <button
+                type="button"
+                className="button"
+                disabled={creatingIncident || !active}
+                onClick={() => void onCreateIncident()}
+              >
+                {creatingIncident ? 'Creating…' : '+ Create incident from this conversation'}
+              </button>
+              <p className="page__note">
+                Copies only explicit facts (confirmed findings, error codes, symptoms, confirmed
+                technician actions). AI suggestions are never imported.
+              </p>
+            </div>
+          )}
+          {incidentError && <p className="form-errors" role="alert">{incidentError}</p>}
+        </div>
       </header>
+
+      <section className="card lane-legend" aria-label="Evidence lanes">
+        <h2 className="lane-legend__title">Evidence lanes in this conversation</h2>
+        <ul className="lane-legend__list">
+          <li className="lane-legend__item">
+            <span className="lane-chip lane-chip--manual">Manual</span>
+            <span>Authoritative. Cited with page numbers. Always takes precedence.</span>
+          </li>
+          <li className="lane-legend__item">
+            <span className="lane-chip lane-chip--incident">Historical</span>
+            <span>Similar past incidents. Supplementary context — not proof of this diagnosis.</span>
+          </li>
+          <li className="lane-legend__item">
+            <span className="lane-chip lane-chip--maintenance">Maintenance</span>
+            <span>Work performed on this machine. Non-causal context, never evidence of a cause.</span>
+          </li>
+        </ul>
+      </section>
 
       <section className="card chat-thread" aria-live="polite">
         {messagesQuery.isInitialLoading && <LoadingState message="Loading messages…" />}
@@ -210,6 +275,16 @@ export function ConversationDetailPage(): JSX.Element {
                 <StatusBadge status={ragTone(message.ragStatus)} label={ragLabel(message.ragStatus)} size="sm" />
               )}
               {message.status === 'pending' && <StatusBadge status="unknown" label="Pending" size="sm" />}
+              {message.role === 'assistant' && message.retrievalMetadata && (
+                <button
+                  type="button"
+                  className="button button--secondary button--sm"
+                  onClick={() => setTraceMessage(message)}
+                  data-testid={`trace-${message.id}`}
+                >
+                  Retrieval trace
+                </button>
+              )}
             </header>
             <pre className="bubble__content">{message.content}</pre>
             {message.clarification && <p className="banner banner--warn">{message.clarification}</p>}
@@ -229,16 +304,36 @@ export function ConversationDetailPage(): JSX.Element {
             {message.sources.length > 0 && (
               <ul className="citations">
                 {message.sources.map((item) => (
-                  <li key={item.sourceId}>
+                  <li key={item.sourceId} className={`citation citation--${item.sourceType === 'incident' ? 'incident' : item.sourceType === 'maintenance' ? 'maintenance' : 'manual'}`}>
+                    <span className={`lane-chip lane-chip--${item.sourceType === 'incident' ? 'incident' : item.sourceType === 'maintenance' ? 'maintenance' : 'manual'}`}>
+                      {item.sourceType === 'incident' ? 'Historical' : item.sourceType === 'maintenance' ? 'Maintenance' : 'Manual'}
+                    </span>
                     <button type="button" className="linkish" onClick={() => setSource(item)}>
-                      {item.manualTitle}
+                      {item.sourceType === 'maintenance'
+                        ? `Maintenance record · ${item.manualTitle}`
+                        : item.manualTitle}
                       {item.manualVersion ? `, version ${item.manualVersion}` : ''}
-                      {item.pageStart
+                      {item.sourceType !== 'maintenance' && item.pageStart
                         ? item.pageEnd && item.pageEnd !== item.pageStart
                           ? `, pages ${item.pageStart}–${item.pageEnd}`
                           : `, page ${item.pageStart}`
                         : ''}
+                      {item.sourceType === 'maintenance' && item.daysBeforeIncident != null && (
+                        <>
+                          {' '}
+                          · {item.daysBeforeIncident} days before
+                          {item.correlationStrength
+                            ? ` · correlation: ${item.correlationStrength}`
+                            : ''}
+                        </>
+                      )}
                     </button>
+                    {item.sourceType === 'maintenance' && (
+                      <span className="maintenance-caption" data-testid="maintenance-caption">
+                        Maintenance record — noted context, never causally linked to this
+                        fault{item.notedByManual ? '; a serviced part is also mentioned in the manual (correlation, not causation)' : ''}
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -349,40 +444,8 @@ export function ConversationDetailPage(): JSX.Element {
         )}
       </section>
 
-      {source && (
-        <div className="modal" role="dialog" aria-modal="true" aria-labelledby="source-title">
-          <div className="modal__card">
-            <h2 id="source-title">{source.manualTitle}</h2>
-            <dl className="kv">
-              <div className="kv__row">
-                <dt>Version</dt>
-                <dd>{source.manualVersion || '—'}</dd>
-              </div>
-              <div className="kv__row">
-                <dt>Pages</dt>
-                <dd>
-                  {source.pageStart}
-                  {source.pageEnd !== source.pageStart ? `–${source.pageEnd}` : ''}
-                </dd>
-              </div>
-              <div className="kv__row">
-                <dt>Section</dt>
-                <dd>{source.sectionTitle || '—'}</dd>
-              </div>
-              <div className="kv__row">
-                <dt>Source id</dt>
-                <dd>
-                  <code>{source.sourceId}</code>
-                </dd>
-              </div>
-            </dl>
-            {source.excerpt && <p className="excerpt">{source.excerpt}</p>}
-            <button type="button" onClick={() => setSource(null)}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {source && <CitationPreview source={source} onClose={() => setSource(null)} />}
+      {traceMessage && <RetrievalTrace message={traceMessage} onClose={() => setTraceMessage(null)} />}
     </div>
   );
 }

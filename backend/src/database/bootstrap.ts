@@ -13,10 +13,20 @@
  *    and config validation rejects obvious placeholders before boot.
  *  - The account is flagged `must_change_password`.
  */
+import { ObjectId } from 'mongodb';
 import type { Db } from 'mongodb';
 import { getConfig } from '../config/env.js';
 import { getLogger } from '../core/logger.js';
-import { collections, SCHEMA_VERSION, type UserDoc } from './collections.js';
+import {
+  collections,
+  SCHEMA_VERSION,
+  type OrganizationDoc,
+  type UserDoc,
+} from './collections.js';
+import {
+  DEFAULT_ORG_NAME,
+  DEFAULT_ORG_SLUG,
+} from '../modules/organizations/organizations.service.js';
 import { hashPassword, validatePasswordStrength } from '../common/password.js';
 import { ensureIndexes } from './indexes.js';
 import * as audit from '../modules/audit/audit.service.js';
@@ -128,6 +138,16 @@ export async function prepareDatabase(db: Db): Promise<BootstrapResult> {
     'Database indexes ensured',
   );
 
+  const defaultOrgId = await ensureDefaultOrganization(db);
+
+  // Phase 7: maintenance rows created before organizations existed resolve to
+  // the default organization, exactly like pre-Phase-6 users.
+  await collections.maintenanceRecords(db).updateMany(
+    // `null` matches both missing and explicitly-null fields in Mongo.
+    { organization_id: null } as unknown as import('mongodb').Filter<import('./collections.js').MaintenanceRecordDoc>,
+    { $set: { organization_id: defaultOrgId } },
+  );
+
   const admin = await ensureBootstrapAdmin(db);
 
   return {
@@ -135,4 +155,29 @@ export async function prepareDatabase(db: Db): Promise<BootstrapResult> {
     adminCreated: admin.created,
     adminSkippedReason: admin.reason,
   };
+}
+
+/**
+ * Seed the default organization (single-tenant deployment).
+ *
+ * Records created before Phase 6 lack an `organization_id`; the org layer
+ * resolves such rows to the default organization, so this is a data-layer
+ * guarantee rather than an optional feature.
+ */
+export async function ensureDefaultOrganization(db: Db): Promise<ObjectId> {
+  const existing = await collections.organizations(db).findOne({ slug: DEFAULT_ORG_SLUG });
+  if (existing) return existing._id;
+
+  const now = new Date();
+  const doc: Omit<OrganizationDoc, '_id'> = {
+    name: DEFAULT_ORG_NAME,
+    slug: DEFAULT_ORG_SLUG,
+    is_active: true,
+    created_at: now,
+    updated_at: now,
+    schema_version: SCHEMA_VERSION,
+  } as Omit<OrganizationDoc, '_id'>;
+  const result = await collections.organizations(db).insertOne(doc as OrganizationDoc);
+  getLogger().info({ slug: DEFAULT_ORG_SLUG }, 'Default organization created');
+  return result.insertedId;
 }

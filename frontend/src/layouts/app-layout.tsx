@@ -19,7 +19,7 @@ export function AppLayout(): JSX.Element {
             </span>
             <div>
               <span className="layout__title">Industrial Troubleshooting Platform</span>
-              <span className="layout__phase">Phase 5 · Conversational troubleshooting</span>
+              <span className="layout__phase">Phase 7 · Maintenance history lane &amp; machine timeline</span>
             </div>
           </div>
 
@@ -33,6 +33,26 @@ export function AppLayout(): JSX.Element {
             {user && (
               <NavLink to="/conversations" className={({ isActive }) => navClass(isActive)}>
                 Troubleshoot
+              </NavLink>
+            )}
+            {user && (
+              <NavLink to="/incidents" className={({ isActive }) => navClass(isActive)}>
+                Incidents
+              </NavLink>
+            )}
+            {user && (
+              <NavLink to="/maintenance" className={({ isActive }) => navClass(isActive)}>
+                Maintenance
+              </NavLink>
+            )}
+            {user && (
+              <NavLink to="/machines" className={({ isActive }) => navClass(isActive)}>
+                Machines
+              </NavLink>
+            )}
+            {user && (user.role === 'admin' || user.role === 'manager') && (
+              <NavLink to="/jobs" className={({ isActive }) => navClass(isActive)}>
+                Jobs
               </NavLink>
             )}
             <a href="/lab.html" className="layout__nav-link">
@@ -54,6 +74,15 @@ export function AppLayout(): JSX.Element {
       <main className="layout__main">
         <Outlet />
       </main>
+
+      <footer className="layout__footer" role="contentinfo">
+        <p className="safety-disclaimer" data-testid="safety-disclaimer">
+          <strong>Safety notice:</strong> answers are generated from your indexed manuals and
+          are fallible. Always verify against the machine documentation before acting — manual
+          evidence is authoritative; historical and maintenance context is supplementary and
+          never proves a diagnosis.
+        </p>
+      </footer>
 
       <footer className="layout__footer">
         <span>Runs fully locally · No cloud AI services</span>

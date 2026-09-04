@@ -19,6 +19,8 @@ import { ApiError } from '../../core/api-error.js';
 import { getConfig } from '../../config/env.js';
 import { toObjectId } from '../../common/validation.js';
 import { answerRag } from '../manuals/rag-client.service.js';
+import { collectMaintenanceContext } from '../maintenance/maintenance-context.js';
+import { resolveActorOrg } from '../organizations/organizations.service.js';
 import * as audit from '../audit/audit.service.js';
 import {
   assembleContext,
@@ -370,6 +372,20 @@ export async function sendMessage(
   const history = [...priorMessages, userMessage];
   const assembled = assembleContext(refreshed, history);
 
+  // Phase 7 maintenance lane: bounded, org-scoped maintenance history for
+  // the conversation's machine. The AI service renders it strictly
+  // separately from manual evidence (AC-13).
+  let maintenanceContext: unknown = null;
+  if (assembled.machineId) {
+    const org = await resolveActorOrg(db, actor.id, actor.username, actor.role);
+    maintenanceContext = await collectMaintenanceContext(
+      db,
+      org.orgId,
+      toObjectId(assembled.machineId),
+      now,
+    );
+  }
+
   const payload = {
     query: input.content,
     machine_id: assembled.machineId,
@@ -378,6 +394,8 @@ export async function sendMessage(
     manual_version: assembled.manualVersion,
     conversation_id: conversationId.toHexString(),
     conversation_context: contextToInternalPayload(assembled),
+    maintenance_context: maintenanceContext,
+    query_at: now.toISOString(),
     debug: false,
   };
 

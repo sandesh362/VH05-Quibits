@@ -183,6 +183,7 @@ export interface SystemFeatureFlags {
   embeddings: boolean;
   vectorSearch: boolean;
   ragAnswers: boolean;
+  incidentManagement: boolean;
   incidentMemory: boolean;
   maintenanceHistory: boolean;
 }
@@ -196,6 +197,7 @@ export const PHASE_1_FEATURES: SystemFeatureFlags = {
   embeddings: false,
   vectorSearch: false,
   ragAnswers: false,
+  incidentManagement: false,
   incidentMemory: false,
   maintenanceHistory: false,
 };
@@ -213,6 +215,7 @@ export const PHASE_2_FEATURES: SystemFeatureFlags = {
   embeddings: false,
   vectorSearch: false,
   ragAnswers: false,
+  incidentManagement: false,
   incidentMemory: false,
   maintenanceHistory: false,
 };
@@ -231,6 +234,7 @@ export const PHASE_3_FEATURES: SystemFeatureFlags = {
   embeddings: true,
   vectorSearch: false,
   ragAnswers: false,
+  incidentManagement: false,
   incidentMemory: false,
   maintenanceHistory: true,
 };
@@ -248,6 +252,7 @@ export const PHASE_4_FEATURES: SystemFeatureFlags = {
   embeddings: true,
   vectorSearch: true,
   ragAnswers: true,
+  incidentManagement: false,
   incidentMemory: false,
   maintenanceHistory: true,
 };
@@ -264,7 +269,25 @@ export const PHASE_5_FEATURES: SystemFeatureFlags = {
   embeddings: true,
   vectorSearch: true,
   ragAnswers: true,
+  incidentManagement: false,
   incidentMemory: false,
+  maintenanceHistory: true,
+};
+
+/**
+ * Phase 6: incident management, historical troubleshooting memory, and
+ * historical incident evidence in RAG. Everything below is ON.
+ */
+export const PHASE_6_FEATURES: SystemFeatureFlags = {
+  authentication: true,
+  manualUpload: true,
+  documentProcessing: true,
+  ocr: true,
+  embeddings: true,
+  vectorSearch: true,
+  ragAnswers: true,
+  incidentManagement: true,
+  incidentMemory: true,
   maintenanceHistory: true,
 };
 
@@ -286,8 +309,12 @@ export const CAPABILITIES = [
   'manual.read', 'manual.create', 'manual.update', 'manual.delete', 'manual.reprocess',
   'manual_processing_job.read', 'manual_page.read', 'manual_chunk.read',
   'incident.read', 'incident.create', 'incident.update_any', 'incident.update_own',
-  'incident.confirm_resolution', 'incident.reopen',
-  'incident_action.create', 'incident_action.read',
+  'incident.delete', 'incident.assign', 'incident.reopen', 'incident.close',
+  'incident.root_cause_update', 'incident.root_cause_confirm', 'incident.root_cause_reject',
+  'incident.fix_record', 'incident.fix_confirm',
+  'incident.reindex',
+  'incident_action.read', 'incident_action.create', 'incident_action.update',
+  'incident_action.confirm',
   'maintenance.read', 'maintenance.create', 'maintenance.update_any', 'maintenance.update_own',
   'conversation.create', 'conversation.read_own', 'conversation.read_any', 'conversation.update_own',
   'user.read_self', 'user.update_self', 'user.read_all', 'user.create', 'user.update_role',
@@ -355,20 +382,65 @@ export const JOB_STATUSES = [
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
-export const INCIDENT_STATUSES = ['open', 'in_progress', 'resolved', 'closed', 'cancelled'] as const;
+/**
+ * Phase 6 incident workflow statuses. Transitions are validated against an
+ * explicit map (see docs/INCIDENT_LIFECYCLE.md) - arbitrary changes are
+ * rejected by the API.
+ */
+export const INCIDENT_STATUSES = [
+  'open', 'investigating', 'waiting_for_information', 'waiting_for_parts',
+  'resolved', 'closed', 'reopened', 'cancelled',
+] as const;
 export type IncidentStatus = (typeof INCIDENT_STATUSES)[number];
 
-/**
- * Resolution is a SEPARATE axis from workflow status, and only a human may set
- * `resolved_confirmed`. See docs/DATA_MODEL.md 8, rules 1-2.
- */
-export const RESOLUTION_STATUSES = [
-  'unresolved', 'resolved_confirmed', 'temporarily_resolved', 'recurring',
-] as const;
-export type ResolutionStatus = (typeof RESOLUTION_STATUSES)[number];
+/** How an incident entered the system. */
+export const INCIDENT_SOURCES = ['conversation', 'manual', 'import', 'other'] as const;
+export type IncidentSource = (typeof INCIDENT_SOURCES)[number];
+
+export const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+export type Priority = (typeof PRIORITIES)[number];
 
 export const SEVERITIES = ['low', 'medium', 'high', 'critical'] as const;
 export type Severity = (typeof SEVERITIES)[number];
+
+/**
+ * Root cause is a confirmation axis of its own. `suspected` may be set by any
+ * authorized technician (or imported from an AI suggestion); only an explicit
+ * human confirmation moves it to `confirmed`, and only a human rejection moves
+ * it to `rejected`.
+ */
+export const ROOT_CAUSE_STATUSES = ['unknown', 'suspected', 'confirmed', 'rejected'] as const;
+export type RootCauseStatus = (typeof ROOT_CAUSE_STATUSES)[number];
+
+/**
+ * Where an incident action came from. `assistant_suggestion` entries are
+ * suggestions, NEVER technician actions; only `technician` entries can be
+ * confirmed as actual performed work.
+ */
+export const INCIDENT_ACTION_SOURCE_TYPES = [
+  'technician', 'assistant_suggestion', 'manual', 'other',
+] as const;
+export type IncidentActionSourceType = (typeof INCIDENT_ACTION_SOURCE_TYPES)[number];
+
+/**
+ * Observed result of an action. Recording `successful` does NOT confirm the
+ * result - confirmation is a separate explicit human act.
+ */
+export const ACTION_RESULT_STATUSES = [
+  'not_tested', 'successful', 'unsuccessful', 'partially_successful',
+  'inconclusive', 'temporary_improvement', 'worsened_condition',
+] as const;
+export type ActionResultStatus = (typeof ACTION_RESULT_STATUSES)[number];
+
+/** Fix (temporary or permanent) confirmation lifecycle. */
+export const FIX_STATUSES = ['recorded', 'confirmed', 'rejected'] as const;
+export type FixStatus = (typeof FIX_STATUSES)[number];
+
+/** Incident vector indexing state (Mongo authoritative over Qdrant). */
+export const INCIDENT_EMBEDDING_STATUSES = [
+  'not_indexed', 'pending', 'indexed', 'failed',
+] as const;
+export type IncidentEmbeddingStatus = (typeof INCIDENT_EMBEDDING_STATUSES)[number];
 
 export const ACTION_OUTCOMES = ['worked', 'partial', 'no_change', 'made_worse', 'unknown'] as const;
 export type ActionOutcome = (typeof ACTION_OUTCOMES)[number];
@@ -695,6 +767,170 @@ export interface ManualChunkView {
   indexingStatus: 'pending' | 'embedded' | 'indexed';
   createdAt: string;
   updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Incidents (Phase 6)
+// ---------------------------------------------------------------------------
+
+export interface IncidentRootCauseView {
+  text: string | null;
+  status: RootCauseStatus;
+  confirmationNote: string | null;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  rejectedBy: string | null;
+  rejectedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export interface IncidentFixView {
+  description: string;
+  result: string | null;
+  status: FixStatus;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  notes: string | null;
+  recordedBy: string;
+  recordedAt: string;
+}
+
+export interface IncidentAttachmentView {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}
+
+export interface IncidentTimelineEventView {
+  id: string;
+  sequence: number;
+  type: string;
+  at: string;
+  actorId: string | null;
+  actorUsername: string | null;
+  previous?: unknown;
+  next?: unknown;
+  note: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface IncidentView {
+  id: string;
+  incidentNumber: string;
+  organizationId: string;
+  title: string;
+  description: string;
+  source: IncidentSource;
+  machineId: string;
+  machineModelId: string;
+  machineLabel?: string | null;
+  machineModelLabel?: string | null;
+  conversationId: string | null;
+  manualId: string | null;
+  manualVersion: string | null;
+  manualTitle?: string | null;
+  reportedBy: string;
+  reportedByName?: string | null;
+  assignedTo: string | null;
+  assignedToName?: string | null;
+  severity: Severity;
+  priority: Priority;
+  status: IncidentStatus;
+  issueStatus: IssueStatus;
+  symptoms: string[];
+  errorCodes: string[];
+  operatingConditions: string[];
+  firstObservedAt: string;
+  lastObservedAt: string | null;
+  rootCause: IncidentRootCauseView;
+  temporaryFix: IncidentFixView | null;
+  permanentFix: IncidentFixView | null;
+  resolutionSummary: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  closedBy: string | null;
+  closedAt: string | null;
+  reopenedBy: string | null;
+  reopenedAt: string | null;
+  tags: string[];
+  attachments: IncidentAttachmentView[];
+  embeddingStatus: IncidentEmbeddingStatus;
+  embeddingError: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IncidentActionView {
+  id: string;
+  incidentId: string;
+  organizationId: string;
+  actionType: IncidentActionSourceType;
+  description: string;
+  performedBy: string | null;
+  performedByName: string | null;
+  sourceMessageId: string | null;
+  sourceSuggestionId: string | null;
+  sourceManualId: string | null;
+  sourceManualVersion: string | null;
+  result: string | null;
+  resultStatus: ActionResultStatus;
+  confirmed: boolean;
+  confirmedBy: string | null;
+  confirmedAt: string | null;
+  notes: string | null;
+  performedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SimilarIncidentView {
+  incidentId: string;
+  incidentNumber: string;
+  title: string;
+  machineId: string | null;
+  machineModelId: string;
+  status: IncidentStatus;
+  issueStatus: IssueStatus;
+  severity: Severity;
+  errorCodes: string[];
+  symptoms: string[];
+  rootCauseStatus: RootCauseStatus;
+  confirmedRootCause: string | null;
+  confirmedFix: string | null;
+  resolutionSummary: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+  similarityScore: number;
+  similarityReasons: string[];
+  /** True when the incident has a confirmed root cause AND a confirmed fix. */
+  confirmed: boolean;
+}
+
+export interface IncidentListQuery {
+  machineId?: string;
+  machineModelId?: string;
+  status?: IncidentStatus;
+  issueStatus?: IssueStatus;
+  severity?: Severity;
+  priority?: Priority;
+  rootCauseStatus?: RootCauseStatus;
+  errorCode?: string;
+  tag?: string;
+  reportedBy?: string;
+  assignedTo?: string;
+  source?: IncidentSource;
+  createdFrom?: string;
+  createdTo?: string;
+  resolvedFrom?: string;
+  resolvedTo?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 // ---------------------------------------------------------------------------

@@ -157,6 +157,17 @@ export async function listChunks(req: Request, res: Response): Promise<void> {
   });
 }
 
+export async function getChunkById(req: Request, res: Response): Promise<void> {
+  const manualId = parseOrThrow(objectIdSchema, req.params.id);
+  const chunkId = parseOrThrow(objectIdSchema, req.params.chunkId);
+  const chunk = await service.getChunkById(
+    requireDb(),
+    toObjectId(manualId),
+    toObjectId(chunkId),
+  );
+  res.status(200).json(successEnvelope({ chunk }, req.requestId));
+}
+
 export async function processingStatus(req: Request, res: Response): Promise<void> {
   const id = parseOrThrow(objectIdSchema, req.params.id);
   const manualId = toObjectId(id);

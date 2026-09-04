@@ -20,8 +20,9 @@ const FEATURE_LABELS: Record<string, string> = {
   embeddings: 'Local embeddings (Ollama)',
   vectorSearch: 'Vector search (Qdrant)',
   ragAnswers: 'Grounded RAG answers',
+  incidentManagement: 'Incident management & workflows',
   incidentMemory: 'Incident memory retrieval',
-  maintenanceHistory: 'Maintenance history',
+  maintenanceHistory: 'Maintenance history lane',
 };
 
 const PHASE_BY_FEATURE: Record<string, string> = {
@@ -32,8 +33,9 @@ const PHASE_BY_FEATURE: Record<string, string> = {
   embeddings: 'Phase 3',
   vectorSearch: 'Phase 4',
   ragAnswers: 'Phase 4–5',
-  incidentMemory: 'Phase 6+',
-  maintenanceHistory: 'Phase 2',
+  incidentManagement: 'Phase 6',
+  incidentMemory: 'Phase 6',
+  maintenanceHistory: 'Phase 7',
 };
 
 export function HomePage(): JSX.Element {
@@ -121,8 +123,8 @@ export function HomePage(): JSX.Element {
         <section className="card" aria-labelledby="features-heading">
           <h2 id="features-heading">Implementation status</h2>
           <p className="page__note page__note--top">
-            Reported by the backend, not hardcoded here. Conversational troubleshooting is
-            available; incident-memory retrieval is not.
+            Reported by the backend, not hardcoded here — every flag reflects what the API
+            actually built, including the maintenance history lane (Phase 7).
           </p>
 
           <ul className="feature-list">

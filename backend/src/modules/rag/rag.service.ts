@@ -13,7 +13,9 @@ import { toObjectId } from '../../common/validation.js';
 import { requireLiveModel } from '../machine-models/machine-models.service.js';
 import { requireLiveMachine } from '../machines/machines.service.js';
 import { requireLiveManual } from '../manuals/manual-processing.service.js';
+import { resolveActorOrg } from '../organizations/organizations.service.js';
 import { answerRag, searchRetrieval } from '../manuals/rag-client.service.js';
+import { collectMaintenanceContext } from '../maintenance/maintenance-context.js';
 import * as audit from '../audit/audit.service.js';
 import type { RagQueryInput } from './rag.validators.js';
 
@@ -98,7 +100,13 @@ export async function resolveScope(db: Db, input: RagQueryInput): Promise<Resolv
   };
 }
 
-function internalPayload(input: RagQueryInput, scope: ResolvedScope, debug: boolean) {
+function internalPayload(
+  input: RagQueryInput,
+  scope: ResolvedScope,
+  debug: boolean,
+  organizationId?: string,
+  extra?: { maintenance_context?: unknown; query_at?: string },
+) {
   return {
     query: input.query,
     machine_id: scope.machineId,
@@ -109,6 +117,14 @@ function internalPayload(input: RagQueryInput, scope: ResolvedScope, debug: bool
     manufacturer: scope.manufacturer,
     include_inactive: input.includeInactive ?? false,
     conversation_id: input.conversationId ?? null,
+    // Organization is resolved from the authenticated user by the caller;
+    // the AI service uses it to filter historical-incident retrieval so one
+    // organization's incident memory can never leak into another's answers.
+    organization_id: organizationId ?? null,
+    // Phase 7 maintenance lane (answer path only). The AI service renders it
+    // strictly separately from manual evidence.
+    maintenance_context: extra?.maintenance_context ?? null,
+    query_at: extra?.query_at ?? null,
     debug,
   };
 }
@@ -187,6 +203,7 @@ export async function search(
   debug = false,
 ): Promise<unknown> {
   const started = Date.now();
+  const org = await resolveActorOrg(db, actor.id, actor.username, actor.role);
   const scope = await resolveScope(db, input);
   await audit.record(db, {
     action: audit.AUDIT_ACTIONS.ragQuerySubmitted,
@@ -199,10 +216,10 @@ export async function search(
       kind: 'search',
     },
   });
-  const raw = (await searchRetrieval(internalPayload(input, scope, debug), requestId)) as Record<
-    string,
-    unknown
-  >;
+  const raw = (await searchRetrieval(
+    internalPayload(input, scope, debug, org.orgId.toHexString()),
+    requestId,
+  )) as Record<string, unknown>;
   await recordRagAudit(db, actor, requestId, input, scope, raw, Date.now() - started, 'search');
   return toCamel(raw);
 }
@@ -215,7 +232,21 @@ export async function answer(
   debug = false,
 ): Promise<unknown> {
   const started = Date.now();
+  const org = await resolveActorOrg(db, actor.id, actor.username, actor.role);
   const scope = await resolveScope(db, input);
+
+  // Phase 7 maintenance lane: bounded, org-scoped maintenance history for the
+  // scoped machine. Never added to retrieval/search - maintenance is a
+  // separate evidence class, never manual evidence.
+  let maintenanceContext: unknown = null;
+  if (scope.machineId) {
+    maintenanceContext = await collectMaintenanceContext(
+      db,
+      org.orgId,
+      toObjectId(scope.machineId),
+      new Date(),
+    );
+  }
   await audit.record(db, {
     action: audit.AUDIT_ACTIONS.ragQuerySubmitted,
     actor,
@@ -227,10 +258,13 @@ export async function answer(
       kind: 'answer',
     },
   });
-  const raw = (await answerRag(internalPayload(input, scope, debug), requestId)) as Record<
-    string,
-    unknown
-  >;
+  const raw = (await answerRag(
+    internalPayload(input, scope, debug, org.orgId.toHexString(), {
+      maintenance_context: maintenanceContext,
+      query_at: new Date().toISOString(),
+    }),
+    requestId,
+  )) as Record<string, unknown>;
   if (raw.status === 'generation_failed' && Array.isArray(raw.warnings)) {
     const citationFail = (raw.warnings as unknown[]).some(
       (w) => typeof w === 'string' && /citation/i.test(w),

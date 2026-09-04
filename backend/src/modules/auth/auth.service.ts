@@ -11,7 +11,12 @@
  */
 import type { Db, ObjectId } from 'mongodb';
 import type { LoginResponse, PublicUser, UserRole } from '@itp/shared';
-import { collections, SCHEMA_VERSION, type UserDoc } from '../../database/collections.js';
+import {
+  collections,
+  SCHEMA_VERSION,
+  USER_PUBLIC_PROJECTION,
+  type UserDoc,
+} from '../../database/collections.js';
 import { ApiError } from '../../core/api-error.js';
 import { getConfig } from '../../config/env.js';
 import {
@@ -486,4 +491,18 @@ export async function changePassword(
     severity: 'security',
     requestId: requestId ?? null,
   });
+}
+
+/**
+ * List active users (assignment pickers). Manager/admin only - the route
+ * gate holds `user.read_all`. Organization scope is enforced by the caller's
+ * org; users without an explicit org resolve to the default organization.
+ */
+export async function listUsers(db: Db) {
+  const users = await collections
+    .users(db)
+    .find({ is_deleted: false }, { projection: USER_PUBLIC_PROJECTION })
+    .sort({ username: 1 })
+    .toArray();
+  return users.map(toPublicUser);
 }

@@ -223,24 +223,54 @@ export async function ensureIndexes(db: Db): Promise<IndexReport[]> {
   report.push({ collection: 'conversation_actions', created: conversationActionIndexes });
 
   // -------------------------------------------------------------------------
+  // organizations
+  // -------------------------------------------------------------------------
+  const organizationIndexes = await collections.organizations(db).createIndexes([
+    { key: { slug: 1 }, name: 'uniq_org_slug', unique: true, collation: CI_COLLATION },
+  ]);
+  report.push({ collection: 'organizations', created: organizationIndexes });
+
+  // -------------------------------------------------------------------------
   // incidents
   // -------------------------------------------------------------------------
   const incidentIndexes = await collections.incidents(db).createIndexes([
+    // Incident numbers are unique WITHIN an organization. The counter never
+    // reuses a number, so no partial filter is needed for deletions.
+    {
+      key: { organization_id: 1, incident_number: 1 },
+      name: 'uniq_org_incident_number',
+      unique: true,
+    },
     // Machine timeline - the primary read.
-    { key: { machine_id: 1, observed_at: -1 }, name: 'machine_timeline' },
-    // "Has this machine thrown this code before?" - the exact-code history
-    // lookup that Phase 7 depends on.
-    { key: { machine_id: 1, error_code: 1, observed_at: -1 }, name: 'machine_code_history' },
+    { key: { organization_id: 1, machine_id: 1, first_observed_at: -1 }, name: 'org_machine_timeline' },
+    // "Has this machine thrown this code before?" - exact-code history.
+    {
+      key: { organization_id: 1, machine_id: 1, error_codes: 1, first_observed_at: -1 },
+      name: 'org_machine_code_history',
+    },
     // Model-tier history, filtered by how it ended.
     {
-      key: { machine_model_id: 1, resolution_status: 1, observed_at: -1 },
-      name: 'model_resolution_history',
+      key: { organization_id: 1, machine_model_id: 1, status: 1, first_observed_at: -1 },
+      name: 'org_model_status_history',
     },
-    { key: { incident_number: 1 }, name: 'uniq_incident_number', unique: true },
-    { key: { status: 1, is_deleted: 1 }, name: 'status_live' },
-    // Drives the Phase 4 indexing sweep: confirmed but not yet vectorised.
-    { key: { resolution_confirmed: 1, vector_indexed: 1 }, name: 'confirmed_unindexed' },
-    { key: { needs_linking: 1 }, name: 'needs_linking', sparse: true },
+    // The list page filter set.
+    {
+      key: { organization_id: 1, status: 1, issue_status: 1, severity: 1, priority: 1 },
+      name: 'org_status_facets',
+    },
+    {
+      key: { organization_id: 1, 'root_cause.status': 1 },
+      name: 'org_root_cause_status',
+    },
+    { key: { organization_id: 1, error_codes: 1 }, name: 'org_error_codes' },
+    { key: { organization_id: 1, tags: 1 }, name: 'org_tags' },
+    { key: { organization_id: 1, reported_by: 1 }, name: 'org_reported_by' },
+    { key: { organization_id: 1, assigned_to: 1 }, name: 'org_assigned_to' },
+    { key: { organization_id: 1, source: 1 }, name: 'org_source' },
+    // Drives the indexing reconciler: confirmed/settled but not yet embedded.
+    { key: { embedding_status: 1, updated_at: 1 }, name: 'embedding_status' },
+    // Conversation back-link.
+    { key: { conversation_id: 1 }, name: 'by_conversation', sparse: true },
     { key: { is_deleted: 1, created_at: -1 }, name: 'live_recent' },
   ]);
   report.push({ collection: 'incidents', created: incidentIndexes });
@@ -249,13 +279,12 @@ export async function ensureIndexes(db: Db): Promise<IndexReport[]> {
   // incident_actions
   // -------------------------------------------------------------------------
   const actionIndexes = await collections.incidentActions(db).createIndexes([
-    // Ordered action list + uniqueness of the sequence within an incident.
-    { key: { incident_id: 1, sequence: 1 }, name: 'uniq_incident_sequence', unique: true },
-    { key: { machine_id: 1, performed_at: -1 }, name: 'machine_actions', sparse: true },
+    // Ordered action list per incident.
+    { key: { incident_id: 1, created_at: 1 }, name: 'incident_recent' },
+    { key: { organization_id: 1, incident_id: 1, performed_at: -1 }, name: 'org_incident_performed' },
+    { key: { organization_id: 1, action_type: 1 }, name: 'org_action_type' },
     { key: { performed_by: 1, performed_at: -1 }, name: 'performer_actions' },
-    // "What did we do the last time we replaced this part?"
-    { key: { 'parts_replaced.part_number': 1 }, name: 'by_part', sparse: true },
-    { key: { outcome: 1 }, name: 'by_outcome' },
+    { key: { organization_id: 1, confirmed: 1 }, name: 'org_confirmed' },
   ]);
   report.push({ collection: 'incident_actions', created: actionIndexes });
 
@@ -263,7 +292,8 @@ export async function ensureIndexes(db: Db): Promise<IndexReport[]> {
   // maintenance_records
   // -------------------------------------------------------------------------
   const maintenanceIndexes = await collections.maintenanceRecords(db).createIndexes([
-    // The primary structured query: machine + time window.
+    // Org isolation (Phase 7) plus the primary structured query: machine + time window.
+    { key: { organization_id: 1, machine_id: 1, performed_at: -1 }, name: 'org_machine_history' },
     { key: { machine_id: 1, performed_at: -1 }, name: 'machine_history' },
     {
       key: { machine_id: 1, maintenance_type: 1, performed_at: -1 },

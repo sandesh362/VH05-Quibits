@@ -9,13 +9,16 @@ import {
 import { requireDb } from '../../common/repository.js';
 import { requireAuth } from '../../middleware/authenticate.js';
 import { roleHasCapability } from '../../common/policy.js';
+import { resolveActorOrg } from '../organizations/organizations.service.js';
 import * as service from './conversations.service.js';
 import * as messages from './conversation-messages.service.js';
 import * as actions from './conversation-actions.service.js';
+import * as conversationIncidents from './conversation-incidents.service.js';
 import {
   archiveConversationSchema,
   closeConversationSchema,
   createConversationSchema,
+  createIncidentFromConversationSchema,
   issueStatusSchema,
   listActionsSchema,
   listConversationsSchema,
@@ -253,4 +256,25 @@ export async function patchSuggestion(req: Request, res: Response): Promise<void
     canReadAny(req),
   );
   res.status(200).json(successEnvelope({ updated: true }, req.requestId));
+}
+
+export async function createIncident(req: Request, res: Response): Promise<void> {
+  assertNoOperators(req.body);
+  const id = parseOrThrow(objectIdSchema, req.params.id);
+  const input = parseOrThrow(createIncidentFromConversationSchema, req.body ?? {});
+  const auth = requireAuth(req);
+  const actor = await resolveActorOrg(requireDb(), auth.userId, auth.username, auth.role);
+  const result = await conversationIncidents.createIncidentFromConversation(
+    requireDb(),
+    toObjectId(id),
+    input,
+    actor,
+    req.requestId,
+  );
+  res.status(201).json(
+    successEnvelope(
+      { incident: result.incident, importedActions: result.importedActions },
+      req.requestId,
+    ),
+  );
 }

@@ -8,7 +8,7 @@
  */
 import { Router } from 'express';
 import { asyncHandler } from '../../common/async-handler.js';
-import { authenticate, optionalAuthenticate } from '../../middleware/authenticate.js';
+import { authenticate, authorize, optionalAuthenticate } from '../../middleware/authenticate.js';
 import { authRateLimiter } from '../../middleware/rate-limit.js';
 import * as controller from './auth.controller.js';
 
@@ -33,6 +33,7 @@ export function userRoutes(): Router {
 
   router.get('/users/me', authenticate(), asyncHandler(controller.me));
   router.patch('/users/me', authenticate(), asyncHandler(controller.updateMe));
+  router.get('/users', authenticate(), authorize('user.read_all'), asyncHandler(controller.listUsers));
 
   return router;
 }

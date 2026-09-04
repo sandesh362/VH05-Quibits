@@ -123,6 +123,13 @@ class Settings(BaseSettings):
     # Qdrant collection holding manual chunk vectors.
     QDRANT_MANUAL_COLLECTION: str = Field(default="manual_chunks")
 
+    # -- Incident memory (Phase 6) -------------------------------------------
+    # Separate Qdrant collection: incident vectors never mix with manual chunks.
+    QDRANT_INCIDENT_COLLECTION: str = Field(default="incident_memory")
+    INCIDENT_HISTORY_TOP_K: int = Field(default=4, ge=1, le=10)
+    INCIDENT_HISTORY_MIN_SEMANTIC_SCORE: float = Field(default=0.5, ge=0.0, le=1.0)
+    INCIDENT_HISTORY_MAX_CONTEXT_CHARS: int = Field(default=2_500, ge=200, le=20_000)
+
     # Hard wall-clock cap for a single processing job.
     MANUAL_PROCESSING_TIMEOUT_MS: int = Field(default=1_800_000, ge=10_000, le=10_800_000)
 
