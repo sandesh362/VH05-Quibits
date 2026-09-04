@@ -29,11 +29,11 @@ const PHASE_BY_FEATURE: Record<string, string> = {
   manualUpload: 'Phase 3',
   documentProcessing: 'Phase 3',
   ocr: 'Phase 3',
-  embeddings: 'Phase 4',
+  embeddings: 'Phase 3',
   vectorSearch: 'Phase 4',
-  ragAnswers: 'Phase 5',
-  incidentMemory: 'Phase 7',
-  maintenanceHistory: 'Phase 8',
+  ragAnswers: 'Phase 4',
+  incidentMemory: 'Phase 5+',
+  maintenanceHistory: 'Phase 2',
 };
 
 export function HomePage(): JSX.Element {

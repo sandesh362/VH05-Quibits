@@ -3,6 +3,15 @@
 Covers brief sections 10 (pipeline), 11 (response contract), 12 (incident memory), 13
 (maintenance intelligence). Tags: **[C]** **[A]** **[R]** **[U]**.
 
+> **Phase 4 implementation note.** The running code implements the *manual-evidence*
+> path only: query normalisation, exact + semantic retrieval, ranking, evidence
+> gates, a strict local-Ollama prompt, and citation validation. See
+> [`PHASE_4_IMPLEMENTATION.md`](./PHASE_4_IMPLEMENTATION.md) and
+> [`RETRIEVAL_ENGINE.md`](./RETRIEVAL_ENGINE.md) for what is actually wired.
+> Incident memory, maintenance intelligence, conversation-history grounding,
+> RRF/cross-encoder, and the full §9 response schema remain the target design
+> for later phases — they are **not** claimed by `/system/info` today.
+
 ---
 
 ## 1. Pipeline overview

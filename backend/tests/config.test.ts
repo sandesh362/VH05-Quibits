@@ -33,8 +33,10 @@ describe('configuration validation', () => {
     expect(config.ollama.baseUrl).toBe('http://localhost:11434');
     expect(config.ollama.embeddingModel).toBe('nomic-embed-text');
     expect(config.mongo.dbName).toBe('itp');
-    // Chat model is intentionally empty until an operator pulls one.
-    expect(config.ollama.chatModel).toBe('');
+    expect(config.ollama.chatModel).toBe('llama3.1');
+    expect(config.rag.requestTimeoutMs).toBe(120_000);
+    expect(config.rag.logQueryText).toBe(false);
+    expect(config.rag.rateLimitMax).toBe(30);
   });
 
   it('rejects a missing MONGODB_URI', () => {

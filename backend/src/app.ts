@@ -21,6 +21,7 @@ import { manualProcessingJobRoutes } from './modules/manuals/manual-processing-j
 import { incidentRoutes } from './modules/incidents/incidents.routes.js';
 import { maintenanceRoutes } from './modules/maintenance/maintenance.routes.js';
 import { conversationRoutes } from './modules/conversations/conversations.routes.js';
+import { ragRoutes } from './modules/rag/rag.routes.js';
 
 export function createApp(): Express {
   const config = getConfig();
@@ -85,6 +86,7 @@ export function createApp(): Express {
   api.use(incidentRoutes());
   api.use(maintenanceRoutes());
   api.use(conversationRoutes());
+  api.use(ragRoutes());
 
   app.use(config.apiPrefix, api);
 

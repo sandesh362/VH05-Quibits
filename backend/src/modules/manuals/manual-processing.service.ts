@@ -104,6 +104,7 @@ export async function persistPagesAndChunks(
   db: Db,
   manualId: ObjectId,
   result: RagProcessResult,
+  scope?: { machineModelId?: ObjectId | null; machineId?: ObjectId | null },
 ): Promise<number> {
   const now = new Date();
   const pages: Omit<ManualPageDoc, '_id'>[] = result.pages.map((p) => ({
@@ -124,8 +125,8 @@ export async function persistPagesAndChunks(
 
   const chunks: Omit<ManualChunkDoc, '_id'>[] = result.chunks.map((c) => ({
     manual_id: manualId,
-    machine_model_id: null,
-    machine_id: null,
+    machine_model_id: scope?.machineModelId ?? null,
+    machine_id: scope?.machineId ?? null,
     chunk_index: c.chunk_index,
     page_start: c.page_start,
     page_end: c.page_end,
@@ -218,8 +219,12 @@ export async function runManualPipeline(
       delete_existing: true,
     });
 
-    // Persist pages + chunks (the source of truth).
-    const chunkCount = await persistPagesAndChunks(db, manualId, result);
+    // Persist pages + chunks (the source of truth). machine_model_id on each
+    // chunk is required for Phase 4 isolation — Phase 3 left it null.
+    const chunkCount = await persistPagesAndChunks(db, manualId, result, {
+      machineModelId: options.machineModelId ?? manual.machine_model_id ?? null,
+      machineId: options.machineId ?? manual.machine_id ?? null,
+    });
 
     const now = new Date();
     await collections.manualProcessingJobs(db).updateOne(

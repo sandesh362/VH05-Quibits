@@ -96,31 +96,27 @@ describe('GET /api/v1/system/info', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.service).toBe('backend');
-    expect(res.body.data.phase).toContain('Phase 3');
+    expect(res.body.data.phase).toContain('Phase 4');
     expect(res.body.data.apiPrefix).toBe(PREFIX);
   });
 
-  it('reports Phase 3 capability flags accurately', async () => {
+  it('reports Phase 4 capability flags accurately', async () => {
     const res = await request(app).get(`${PREFIX}/system/info`);
     const features = res.body.data.features;
 
-    // Phase 3 delivers the ingestion pipeline.
     expect(features.authentication).toBe(true);
     expect(features.manualUpload).toBe(true);
     expect(features.documentProcessing).toBe(true);
     expect(features.ocr).toBe(true);
     expect(features.embeddings).toBe(true);
+    expect(features.vectorSearch).toBe(true);
+    expect(features.ragAnswers).toBe(true);
 
     /**
-     * Retrieval/RAG are Phase 4/5 and must still report false - the UI reads
-     * these flags to decide what to offer, so a premature `true` would claim a
-     * capability the backend does not have.
+     * Incident memory and conversational RAG remain Phase 5+. A premature
+     * `true` would claim a capability the backend does not have.
      */
-    const mustRemainFalse = ['vectorSearch', 'ragAnswers', 'incidentMemory'];
-
-    for (const name of mustRemainFalse) {
-      expect(features[name], `feature "${name}" must be false in Phase 3`).toBe(false);
-    }
+    expect(features.incidentMemory).toBe(false);
   });
 
   it('lists dependency names but never their URLs or credentials', async () => {

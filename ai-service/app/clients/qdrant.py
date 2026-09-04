@@ -91,6 +91,8 @@ class QdrantClientWrapper:
             ("machine_model_id", models.PayloadSchemaType.KEYWORD),
             ("manual_id", models.PayloadSchemaType.KEYWORD),
             ("document_type", models.PayloadSchemaType.KEYWORD),
+            ("document_version", models.PayloadSchemaType.KEYWORD),
+            ("is_deleted", models.PayloadSchemaType.BOOL),
             ("embedding_model", models.PayloadSchemaType.KEYWORD),
             ("embedding_version", models.PayloadSchemaType.KEYWORD),
             ("chunk_index", models.PayloadSchemaType.INTEGER),

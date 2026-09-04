@@ -331,7 +331,11 @@ X-Internal-Token: <INTERNAL_SERVICE_TOKEN>
   misconfigured — otherwise a token typo would look identical to a downed
   service.
 - Enforcement on non-health endpoints begins in Phase 3, when the first real
-  internal endpoint exists.
+  internal endpoint exists. Phase 4 adds `POST /internal/v1/retrieval/search`,
+  `POST /internal/v1/rag/answer`, and `GET /internal/v1/rag/health` behind the
+  same token. Public Express routes: `POST /api/v1/retrieval/search`,
+  `POST /api/v1/rag/answer` (`manual.read`), `POST /api/v1/rag/debug`
+  (`audit_log.read`). See [`PHASE_4_IMPLEMENTATION.md`](./PHASE_4_IMPLEMENTATION.md).
 
 ---
 

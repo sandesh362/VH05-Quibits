@@ -32,18 +32,17 @@ CAPABILITY_BY_DEPENDENCY: dict[str, list[str]] = {
     "mongodb": ["job_progress_reporting"],
 }
 
-# Phase 3: the ingestion pipeline (extraction -> OCR -> cleaning -> chunking ->
-# embeddings -> Qdrant indexing) is implemented. Retrieval/search and RAG
-# answers are Phase 4/5 and must remain False so the UI cannot claim them.
-PHASE_3_FEATURES: dict[str, bool] = {
+# Phase 4: retrieval and evidence-grounded RAG are implemented. Incident
+# memory and maintenance intelligence remain Phase 5+ and are not advertised.
+PHASE_4_FEATURES: dict[str, bool] = {
     "pdf_extraction": True,
     "ocr": True,
     "chunking": True,
     "embeddings": True,
     "vector_indexing": True,
-    "retrieval": False,
-    "rag_answers": False,
-    "citation_validation": False,
+    "retrieval": True,
+    "rag_answers": True,
+    "citation_validation": True,
 }
 
 
@@ -125,10 +124,10 @@ async def system_info(request: Request) -> dict:
         apiPrefix=settings.RAG_API_PREFIX,
         pythonVersion=sys.version.split()[0],
         platform=f"{platform.system()} {platform.machine()}",
-        phase="Phase 3 - Document Ingestion & Indexing",
+        phase="Phase 4 - Retrieval Engine and RAG Pipeline",
         startedAt=_STARTED_AT.isoformat().replace("+00:00", "Z"),
         uptimeSeconds=_uptime_seconds(),
-        features=PHASE_3_FEATURES,
+        features=PHASE_4_FEATURES,
         configuredDependencies=["qdrant", "ollama", "mongodb"],
     )
     return success_envelope(payload.model_dump(), get_request_id(request))

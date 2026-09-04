@@ -5,10 +5,16 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import './app-layout.css';
 
-const NAV_ITEMS = [
+const NAV_ITEMS: ReadonlyArray<{
+  to: string;
+  label: string;
+  end: boolean;
+  external?: boolean;
+}> = [
   { to: '/', label: 'Home', end: true },
   { to: '/status', label: 'Service status', end: false },
-] as const;
+  { to: '/lab.html', label: 'RAG lab', end: false, external: true },
+];
 
 export function AppLayout(): JSX.Element {
   return (
@@ -21,23 +27,29 @@ export function AppLayout(): JSX.Element {
             </span>
             <div>
               <span className="layout__title">Industrial Troubleshooting Platform</span>
-              <span className="layout__phase">Phase 1 · Infrastructure foundation</span>
+              <span className="layout__phase">Phase 4 · Retrieval &amp; RAG</span>
             </div>
           </div>
 
           <nav className="layout__nav" aria-label="Main navigation">
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  isActive ? 'layout__nav-link layout__nav-link--active' : 'layout__nav-link'
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
+            {NAV_ITEMS.map((item) =>
+              'external' in item && item.external ? (
+                <a key={item.to} href={item.to} className="layout__nav-link">
+                  {item.label}
+                </a>
+              ) : (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className={({ isActive }) =>
+                    isActive ? 'layout__nav-link layout__nav-link--active' : 'layout__nav-link'
+                  }
+                >
+                  {item.label}
+                </NavLink>
+              ),
+            )}
           </nav>
         </div>
       </header>

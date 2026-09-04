@@ -1,11 +1,8 @@
 """FastAPI application for the document-processing and RAG service.
 
-PHASE 1 SCOPE: health, readiness and system information only.
-
-Deliberately NOT implemented here (later phases):
-  - PDF extraction, OCR, chunking      (Phase 3)
-  - Embeddings, Qdrant indexing        (Phase 4)
-  - Retrieval, RAG, citation validation (Phase 5)
+Phase 4: retrieval (exact + semantic), evidence-grounded RAG, citation
+validation and refusal. Conversation memory, incident history and
+maintenance intelligence remain out of scope.
 
 This service is INTERNAL. It must never be reachable from a browser; only the
 Express API calls it, over the internal Docker network.
@@ -29,6 +26,8 @@ from app.core.middleware import RequestContextMiddleware, get_request_id
 from app.routers import documents as documents_router
 from app.routers import health as health_router
 from app.routers import indexing as indexing_router
+from app.routers import rag as rag_router
+from app.routers import retrieval as retrieval_router
 
 # --------------------------------------------------------------------------- #
 # Configuration is validated at import time so a bad environment fails fast
@@ -60,7 +59,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
     log.info(
         "service_starting",
-        phase="Phase 3 - Document Ingestion & Indexing",
+        phase="Phase 4 - Retrieval Engine and RAG Pipeline",
         environment=settings.PYTHON_ENV,
         api_prefix=settings.RAG_API_PREFIX,
         qdrant_url=settings.QDRANT_URL,
@@ -78,7 +77,7 @@ app = FastAPI(
     title="ITP RAG Service",
     description=(
         "Internal document-processing and RAG service. "
-        "Phase 1: health and readiness endpoints only."
+        "Phase 4: retrieval, evidence-grounded generation, citation validation."
     ),
     version="0.1.0",
     lifespan=lifespan,
@@ -200,6 +199,8 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
 app.include_router(health_router.router, prefix=settings.RAG_API_PREFIX)
 app.include_router(documents_router.router, prefix=settings.RAG_API_PREFIX)
 app.include_router(indexing_router.router, prefix=settings.RAG_API_PREFIX)
+app.include_router(retrieval_router.router, prefix=settings.RAG_API_PREFIX)
+app.include_router(rag_router.router, prefix=settings.RAG_API_PREFIX)
 
 
 @app.get("/healthz", include_in_schema=False)

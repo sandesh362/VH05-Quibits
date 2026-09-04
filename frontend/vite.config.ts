@@ -56,7 +56,9 @@ export default defineConfig(({ mode, command }) => {
         '/api': {
           target: proxyTarget,
           changeOrigin: true,
-          timeout: 30_000,
+          // RAG generation can take up to RAG_REQUEST_TIMEOUT_MS (default 120s).
+          timeout: 130_000,
+          proxyTimeout: 130_000,
         },
       },
     },

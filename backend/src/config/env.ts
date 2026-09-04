@@ -100,8 +100,15 @@ const envSchema = z
 
     // Ollama (probed by the RAG service; Express only reports configuration)
     OLLAMA_BASE_URL: z.string().url().default('http://localhost:11434'),
-    OLLAMA_CHAT_MODEL: z.string().optional().default(''),
+    OLLAMA_CHAT_MODEL: z.string().optional().default('llama3.1'),
     OLLAMA_EMBEDDING_MODEL: z.string().default('nomic-embed-text'),
+    RAG_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(120_000),
+    RAG_LOG_QUERY_TEXT: z
+      .string()
+      .optional()
+      .transform((v) => v === 'true' || v === '1'),
+    RAG_RATE_LIMIT_MAX: z.coerce.number().int().min(1).max(1000).default(30),
+    RAG_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().min(1).max(120).default(1),
 
     // Storage
     STORAGE_ROOT: z.string().default('./storage'),
@@ -240,6 +247,12 @@ export interface AppConfig {
     readonly chatModel: string;
     readonly embeddingModel: string;
   };
+  readonly rag: {
+    readonly requestTimeoutMs: number;
+    readonly logQueryText: boolean;
+    readonly rateLimitMax: number;
+    readonly rateLimitWindowMinutes: number;
+  };
   readonly storageRoot: string;
   readonly manualMaxFileSizeMb: number;
   readonly manualStoragePath: string;
@@ -331,6 +344,12 @@ export function parseConfig(source: NodeJS.ProcessEnv = process.env): AppConfig 
       baseUrl: env.OLLAMA_BASE_URL.replace(/\/+$/, ''),
       chatModel: env.OLLAMA_CHAT_MODEL,
       embeddingModel: env.OLLAMA_EMBEDDING_MODEL,
+    },
+    rag: {
+      requestTimeoutMs: env.RAG_REQUEST_TIMEOUT_MS,
+      logQueryText: env.RAG_LOG_QUERY_TEXT,
+      rateLimitMax: env.RAG_RATE_LIMIT_MAX,
+      rateLimitWindowMinutes: env.RAG_RATE_LIMIT_WINDOW_MINUTES,
     },
     /**
      * Resolve a relative STORAGE_ROOT against the REPO ROOT, not the process

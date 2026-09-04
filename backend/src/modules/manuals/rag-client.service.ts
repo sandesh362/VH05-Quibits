@@ -137,6 +137,90 @@ function errorFromResponse(body: unknown, fallback: string): ApiError {
  * embeddings); because it runs inside the Express background worker, the
  * upload request is never held open for it.
  */
+export interface RagInternalQuery {
+  query: string;
+  machine_id?: string | null;
+  machine_model_id?: string | null;
+  manual_id?: string | null;
+  manual_version?: string | null;
+  manual_type?: string | null;
+  manufacturer?: string | null;
+  include_inactive?: boolean;
+  conversation_id?: string | null;
+  debug?: boolean;
+  top_k?: number;
+}
+
+async function callRagJson(
+  path: string,
+  body: unknown,
+  timeoutMs: number,
+  requestId?: string,
+): Promise<unknown> {
+  const config = getConfig();
+  const url = `${config.ragService.url}${config.ragService.apiPrefix}${path}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Token': config.ragService.internalToken,
+        ...(requestId ? { 'X-Request-Id': requestId } : {}),
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    clearTimeout(timeout);
+    const abort = error instanceof Error && error.name === 'AbortError';
+    throw new ApiError(abort ? 'INTERNAL_SERVER_ERROR' : 'DEPENDENCY_UNAVAILABLE', abort
+      ? `The retrieval service timed out after ${Math.round(timeoutMs / 1000)}s.`
+      : 'The retrieval service is unreachable.', {
+      cause: error,
+      isOperational: true,
+      internalContext: { dependency: 'rag-service', url: config.ragService.url },
+    });
+  }
+  clearTimeout(timeout);
+
+  let parsed: unknown;
+  try {
+    parsed = await response.json();
+  } catch {
+    throw ApiError.dependencyUnavailable('rag-service');
+  }
+
+  if (!response.ok) {
+    throw errorFromResponse(parsed, 'Retrieval service request failed.');
+  }
+
+  const data = (parsed as { data?: unknown })?.data;
+  if (data === undefined) {
+    throw ApiError.dependencyUnavailable('rag-service');
+  }
+  return data;
+}
+
+export async function searchRetrieval(
+  payload: RagInternalQuery,
+  requestId?: string,
+): Promise<unknown> {
+  const config = getConfig();
+  return callRagJson('/retrieval/search', payload, config.rag.requestTimeoutMs, requestId);
+}
+
+export async function answerRag(
+  payload: RagInternalQuery,
+  requestId?: string,
+): Promise<unknown> {
+  const config = getConfig();
+  return callRagJson('/rag/answer', payload, config.rag.requestTimeoutMs, requestId);
+}
+
 export async function processManual(options: RagProcessOptions): Promise<RagProcessResult> {
   const config = getConfig();
   const log = getLogger();

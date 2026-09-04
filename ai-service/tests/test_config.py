@@ -39,8 +39,10 @@ class TestValidConfiguration:
         settings = build()
         assert settings.OLLAMA_EMBEDDING_MODEL == "nomic-embed-text"
         assert settings.MONGO_DB_NAME == "itp"
-        # Chat model stays empty until an operator pulls one.
-        assert settings.OLLAMA_CHAT_MODEL == ""
+        assert settings.OLLAMA_CHAT_MODEL == "llama3.1"
+        assert settings.RAG_TOP_K == 8
+        assert settings.RAG_ALLOW_UNSUPPORTED_ANSWER is False
+        assert settings.RAG_LOG_QUERY_TEXT is False
 
     def test_strips_trailing_slashes(self) -> None:
         settings = build(QDRANT_URL="http://localhost:6333/")

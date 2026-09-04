@@ -1,3 +1,31 @@
+# Testing
+
+Phase 2 inventory is preserved below. Phase 3 added document-pipeline tests; Phase 4 adds retrieval/RAG tests.
+
+### Phase 4 (retrieval / RAG)
+
+```bash
+cd ai-service && .venv/bin/pytest
+cd backend && npx vitest run tests/rag.test.ts tests/api.test.ts tests/config.test.ts
+```
+
+| File | Area |
+|---|---|
+| `ai-service/tests/test_normalize.py` | Error-code variants, scope classification |
+| `ai-service/tests/test_exact.py` | Identifier isolation (`E-104` ≠ `E-140`), model filter |
+| `ai-service/tests/test_semantic.py` | Qdrant-stand-in isolation |
+| `ai-service/tests/test_ranking.py` | Merge, exact pin, Jaccard |
+| `ai-service/tests/test_evidence.py` | Sufficiency, conflicts, Qdrant-down |
+| `ai-service/tests/test_context.py` | Evidence block + budget |
+| `ai-service/tests/test_citations.py` | Invented SOURCE_ID / page numbers |
+| `ai-service/tests/test_prompt.py` | Untrusted delimiters |
+| `ai-service/tests/test_rag_pipeline.py` | Grounded answer, refusals, injection |
+| `ai-service/tests/test_retrieval_api.py` | Internal HTTP + token |
+| `ai-service/tests/test_evaluation.py` | Golden corpus `fixtures/evaluation/corpus.json` |
+| `backend/tests/rag.test.ts` | Authz, validation, 503 when FastAPI is down |
+
+---
+
 # Testing — Phase 2
 
 **149 backend tests, all passing.** 42 carried from Phase 1, 107 added in Phase 2.

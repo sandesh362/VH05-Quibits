@@ -7,13 +7,11 @@ It combines **machine manuals**, **machine context**, **past incidents**, and **
 history** into a retrieval-augmented answer that always says *where every claim came from* —
 and refuses to answer when it cannot.
 
-> **Status: Phase 2 — Backend Foundation complete.**
-> Authentication, role-based authorization, the full data layer, and CRUD for every
-> domain entity are implemented and tested (149 backend tests).
-> **Nothing AI-related exists yet** — no manual upload, no PDF processing, no OCR, no
-> embeddings, no Qdrant collections, no RAG, no LLM calls, no chat answers. Do not assume
-> a feature exists; the home page reads its capability table live from the backend, and
-> every document/AI flag is still `false`.
+> **Status: Phase 4 — Retrieval Engine and RAG Pipeline complete, pending review.**
+> Manuals can be uploaded, indexed, searched (exact + semantic) and answered from
+> retrieved evidence only, with application-authored citations and structured refusals.
+> Incident memory, multi-turn chat, and maintenance intelligence are **not** implemented.
+> `/system/info` is the source of truth for capability flags.
 
 ---
 
@@ -128,9 +126,10 @@ Full instructions, including Ollama setup and OS-specific notes:
 | Incident resolution requiring explicit human confirmation | ✅ Phase 2 |
 | Audit logging on every state change | ✅ Phase 2 |
 | 211 automated tests (149 backend, 47 FastAPI, 15 frontend) | ✅ |
-| Manual upload / PDF processing / OCR | ❌ Phase 3 |
-| Embeddings, Qdrant, vector search | ❌ Phase 4 |
-| RAG answers, troubleshooting chat | ❌ Phase 5 |
+| Manual upload / PDF processing / OCR | ✅ Phase 3 |
+| Embeddings, Qdrant, vector search | ✅ Phase 4 |
+| Evidence-grounded RAG answers | ✅ Phase 4 |
+| Incident memory, multi-turn chat | ❌ Phase 5 |
 
 The **Service status** page shows the true state of every dependency, including
 failures — nothing is hardcoded to "healthy".
@@ -178,7 +177,7 @@ failures — nothing is hardcoded to "healthy".
 │   │   ├── core/              # config, logging, errors, middleware
 │   │   ├── clients/           # real dependency probes
 │   │   ├── routers/           # health, ready, system/info
-│   │   └── rag/               # EMPTY - Phase 3+
+│   │   └── rag/               # retrieval + RAG (Phase 4)
 │   └── tests/                 # 47 tests
 │
 ├── packages/shared/           # @itp/shared - types shared by TS services
@@ -252,7 +251,14 @@ flagged `must_change_password`.
 
 ---
 
+## Phase 4 documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/PHASE_4_IMPLEMENTATION.md`](docs/PHASE_4_IMPLEMENTATION.md) | What was built, contracts, refusals, tests |
+| [`docs/RETRIEVAL_ENGINE.md`](docs/RETRIEVAL_ENGINE.md) | Normalisation, isolation, ranking, evidence gates |
+
 ## Next step
 
-Phase 2 is complete and awaiting review. **Phase 3 (manual upload and document
-processing) will not start without explicit approval.**
+Phase 4 is complete and awaiting review. **Phase 5 (conversation memory / incident
+retrieval) will not start without explicit approval.**

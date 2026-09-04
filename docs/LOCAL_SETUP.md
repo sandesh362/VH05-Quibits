@@ -145,7 +145,7 @@ most:
 | `APP_PORT` | `8080` | Express API port |
 | `RAG_SERVICE_PORT` | `8000` | FastAPI port |
 | `WEB_PORT` | `5173` | Frontend port |
-| `OLLAMA_CHAT_MODEL` | *(empty)* | Intentionally blank — see §4 |
+| `OLLAMA_CHAT_MODEL` | `llama3.1` | Pull with `ollama pull llama3.1` before RAG answers |
 | `LOG_LEVEL` | `info` | Set to `debug` for verbose logs |
 
 ---
@@ -183,14 +183,14 @@ A JSON object (even with an empty `models` array) means Ollama is running.
 
 ### Pull models
 
-**Phase 1 does not require any model.** Nothing calls Ollama yet. Pull these when
-you reach the phases that need them:
+Phase 3 needs the embedding model. Phase 4 also needs a chat model:
 
 ```bash
-# Embeddings - needed from Phase 4  (~275 MB)
+# Embeddings (~275 MB) — required from Phase 3
 ollama pull nomic-embed-text
 
-# Chat model - needed from Phase 5. Pick one that fits your hardware:
+# Chat model — required from Phase 4. Pick one that fits your hardware:
+ollama pull llama3.1          # default in .env.example
 ollama pull llama3.1:8b       # ~4.7 GB, needs ~8 GB RAM
 ollama pull qwen2.5:7b        # ~4.7 GB, good instruction following
 ollama pull phi3.5            # ~2.2 GB, for constrained machines
@@ -199,16 +199,15 @@ ollama pull phi3.5            # ~2.2 GB, for constrained machines
 Then record your choice in `.env`:
 
 ```ini
-OLLAMA_CHAT_MODEL=llama3.1:8b
+OLLAMA_CHAT_MODEL=llama3.1
 ```
 
-> **`OLLAMA_CHAT_MODEL` is empty by default on purpose.** The platform must never
-> pretend a model exists. While it is blank, the status page reports Ollama as
-> *not configured* rather than claiming success. Test a model directly with:
->
-> ```bash
-> ollama run llama3.1:8b "Reply with the single word: ready"
-> ```
+If the configured chat model is not pulled, RAG returns `generation_failed` /
+`OLLAMA_UNAVAILABLE` rather than inventing an answer. Retrieval still works.
+
+```bash
+ollama run llama3.1 "Reply with the single word: ready"
+```
 
 ---
 

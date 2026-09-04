@@ -172,4 +172,10 @@ export const AUDIT_ACTIONS = {
   maintenanceUpdated: 'maintenance.updated',
   conversationCreated: 'conversation.created',
   conversationUpdated: 'conversation.updated',
+  ragQuerySubmitted: 'rag_query_submitted',
+  retrievalCompleted: 'retrieval_completed',
+  ragAnswerGenerated: 'rag_answer_generated',
+  ragAnswerRefused: 'rag_answer_refused',
+  ragGenerationFailed: 'rag_generation_failed',
+  ragCitationValidationFailed: 'rag_citation_validation_failed',
 } as const;

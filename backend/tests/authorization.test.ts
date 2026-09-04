@@ -275,6 +275,16 @@ describe('unauthenticated access', () => {
     expect((await request(app).get(`${PREFIX}/health`)).status).toBe(200);
     expect((await request(app).get(`${PREFIX}/system/info`)).status).toBe(200);
   });
+
+  it('refuses unauthenticated retrieval and RAG', async () => {
+    for (const path of ['retrieval/search', 'rag/answer', 'rag/debug']) {
+      const res = await request(app)
+        .post(`${PREFIX}/${path}`)
+        .send({ query: 'Why is error E-104 appearing?' });
+      expect(res.status, `${path} must require authentication`).toBe(401);
+      expect(res.body.error.code).toBe('UNAUTHENTICATED');
+    }
+  });
 });
 
 describe('conversation ownership', () => {

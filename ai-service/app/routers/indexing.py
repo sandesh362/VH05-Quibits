@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from app.clients.qdrant import new_qdrant_client
+from app.core.auth import require_internal_token
 from app.core.config import get_settings
 from app.core.errors import success_envelope
 from app.core.middleware import get_request_id
@@ -21,11 +22,6 @@ router = APIRouter(tags=["indexing"])
 
 class DeleteRequest(BaseModel):
     manual_id: str
-
-
-def require_internal_token(x_internal_token: str | None = Header(default=None)) -> None:
-    if not x_internal_token or x_internal_token != get_settings().INTERNAL_SERVICE_TOKEN:
-        raise HTTPException(status_code=401, detail="Missing or invalid internal token.")
 
 
 @router.post("/indexing/manual-chunks/delete")

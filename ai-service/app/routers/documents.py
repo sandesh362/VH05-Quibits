@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from app.core.auth import require_internal_token
 from app.core.config import get_settings
 from app.core.errors import success_envelope
 from app.core.logging import get_logger
@@ -52,12 +53,6 @@ class ProcessRequestModel(BaseModel):
     machine_id: str | None = None
     manual: ManualMeta = Field(default_factory=ManualMeta)
     options: ProcessOptions = Field(default_factory=ProcessOptions)
-
-
-def require_internal_token(x_internal_token: str | None = Header(default=None)) -> None:
-    """Reject any caller that does not present the shared internal token."""
-    if not x_internal_token or x_internal_token != get_settings().INTERNAL_SERVICE_TOKEN:
-        raise HTTPException(status_code=401, detail="Missing or invalid internal token.")
 
 
 @router.post("/documents/process")

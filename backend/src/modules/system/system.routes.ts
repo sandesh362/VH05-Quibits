@@ -6,7 +6,7 @@
  */
 import os from 'node:os';
 import { Router, type Request, type Response } from 'express';
-import { PHASE_3_FEATURES, type SystemInfoResponse } from '@itp/shared';
+import { PHASE_4_FEATURES, type SystemInfoResponse } from '@itp/shared';
 import { getConfig } from '../../config/env.js';
 import { successEnvelope } from '../../core/api-error.js';
 
@@ -27,10 +27,10 @@ export function systemRoutes(): Router {
       apiPrefix: config.apiPrefix,
       nodeVersion: process.version,
       platform: `${os.type()} ${os.arch()}`,
-      phase: 'Phase 3 - Document Ingestion & Indexing',
+      phase: 'Phase 4 - Retrieval Engine and RAG Pipeline',
       startedAt: STARTED_AT,
       uptimeSeconds: Math.round(process.uptime()),
-      features: PHASE_3_FEATURES,
+      features: PHASE_4_FEATURES,
       configuredDependencies,
     };
 

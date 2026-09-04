@@ -28,6 +28,20 @@ function limitHandler(req: Request, res: Response): void {
   );
 }
 
+/** Applied to retrieval / RAG endpoints. */
+export function ragRateLimiter(): RateLimitRequestHandler {
+  const config = getConfig();
+
+  return rateLimit({
+    windowMs: config.rag.rateLimitWindowMinutes * 60_000,
+    limit: config.rag.rateLimitMax,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    handler: limitHandler,
+    skip: () => getConfig().isTest,
+  });
+}
+
 /** Applied to login/register/refresh. */
 export function authRateLimiter(): RateLimitRequestHandler {
   const config = getConfig();

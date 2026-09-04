@@ -72,9 +72,33 @@ class Settings(BaseSettings):
     # -- Ollama --------------------------------------------------------------
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")
     # Empty until an operator pulls a model. Never assume one is installed.
-    OLLAMA_CHAT_MODEL: str = Field(default="")
+    OLLAMA_CHAT_MODEL: str = Field(default="llama3.1")
     OLLAMA_EMBEDDING_MODEL: str = Field(default="nomic-embed-text")
     OLLAMA_TIMEOUT_MS: int = Field(default=5000, ge=100, le=120_000)
+
+    # -- Retrieval / RAG (Phase 4) -------------------------------------------
+    RAG_TEMPERATURE: float = Field(default=0.1, ge=0.0, le=1.0)
+    RAG_MAX_OUTPUT_TOKENS: int = Field(default=1200, ge=32, le=8192)
+    RAG_REQUEST_TIMEOUT_MS: int = Field(default=120_000, ge=1000, le=300_000)
+    RAG_TOP_K: int = Field(default=8, ge=1, le=50)
+    RAG_MIN_CONTEXT_CHUNKS: int = Field(default=1, ge=1, le=20)
+    RAG_MIN_SEMANTIC_SCORE: float = Field(default=0.45, ge=0.0, le=1.0)
+    RAG_MIN_FINAL_SCORE: float = Field(default=0.45, ge=0.0, le=1.0)
+    RAG_REQUIRE_SOURCE_METADATA: bool = Field(default=True)
+    RAG_ALLOW_UNSUPPORTED_ANSWER: bool = Field(default=False)
+    RAG_MAX_CONTEXT_CHARS: int = Field(default=12_000, ge=500, le=200_000)
+    RAG_MAX_PROMPT_CHARS: int = Field(default=24_000, ge=1000, le=400_000)
+    RAG_CANDIDATE_LIMIT: int = Field(default=40, ge=5, le=200)
+    RAG_NEAR_DUPLICATE_THRESHOLD: float = Field(default=0.92, ge=0.5, le=1.0)
+    RAG_WEIGHT_EXACT_MATCH: float = Field(default=0.35, ge=0.0, le=1.0)
+    RAG_WEIGHT_TECHNICAL_TERM: float = Field(default=0.15, ge=0.0, le=1.0)
+    RAG_WEIGHT_MACHINE_SCOPE: float = Field(default=0.10, ge=0.0, le=1.0)
+    RAG_WEIGHT_MANUAL_SCOPE: float = Field(default=0.10, ge=0.0, le=1.0)
+    RAG_WEIGHT_SEMANTIC: float = Field(default=0.45, ge=0.0, le=1.0)
+    RAG_WEIGHT_SECTION: float = Field(default=0.05, ge=0.0, le=1.0)
+    RAG_DUPLICATE_PENALTY: float = Field(default=0.05, ge=0.0, le=1.0)
+    RAG_EXPECTED_EMBEDDING_DIMENSION: int = Field(default=768, ge=0, le=4096)
+    RAG_LOG_QUERY_TEXT: bool = Field(default=False)
 
     # -- Storage -------------------------------------------------------------
     STORAGE_ROOT: str = Field(default="./storage")

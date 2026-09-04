@@ -235,6 +235,23 @@ export const PHASE_3_FEATURES: SystemFeatureFlags = {
   maintenanceHistory: true,
 };
 
+/**
+ * Phase 4: retrieval (exact + semantic) and evidence-grounded RAG answers exist.
+ * Incident memory and conversational multi-turn remain Phase 5+ so those flags
+ * stay false. `maintenanceHistory` still reflects the Phase 2 data layer only.
+ */
+export const PHASE_4_FEATURES: SystemFeatureFlags = {
+  authentication: true,
+  manualUpload: true,
+  documentProcessing: true,
+  ocr: true,
+  embeddings: true,
+  vectorSearch: true,
+  ragAnswers: true,
+  incidentMemory: false,
+  maintenanceHistory: true,
+};
+
 // ---------------------------------------------------------------------------
 // Roles and authorization (Phase 2)
 // ---------------------------------------------------------------------------
@@ -467,7 +484,44 @@ export interface ManualPageView {
   ocrConfidence: number | null;
 }
 
-/** A manual chunk (the retrieval unit). */
+// ---------------------------------------------------------------------------
+// Retrieval / RAG (Phase 4)
+// ---------------------------------------------------------------------------
+
+export type RagStatus =
+  | 'answered'
+  | 'retrieved'
+  | 'clarification_required'
+  | 'insufficient_evidence'
+  | 'conflicting_evidence'
+  | 'processing_unavailable'
+  | 'generation_failed';
+
+export type RagConfidence = 'high' | 'medium' | 'low';
+
+export interface RagSourceView {
+  sourceId: string;
+  chunkId: string;
+  manualId: string;
+  manualTitle: string;
+  manualVersion: string | null;
+  pageStart: number;
+  pageEnd: number;
+  sectionTitle: string | null;
+  machineModelId: string | null;
+}
+
+export interface RagAnswerView {
+  status: RagStatus;
+  answer: string | null;
+  confidence: RagConfidence | null;
+  evidenceSufficient: boolean;
+  sources: RagSourceView[];
+  warnings: string[];
+  reason?: string;
+  message?: string;
+}
+
 export interface ManualChunkView {
   id: string;
   manualId: string;

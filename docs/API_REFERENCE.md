@@ -228,7 +228,35 @@ Filters include `partNumber`, which is normalised the same way as on write.
 
 Technicians and viewers see only their own conversations; another user's returns **404**, not 403, so existence is not disclosed. Managers and admins may read any.
 
-`POST .../messages` returns `501 NOT_IMPLEMENTED` and **stores nothing**. Answering requires retrieval and an LLM, neither of which exists in Phase 2. `GET .../messages` returns an empty array.
+`POST .../messages` returns `501 NOT_IMPLEMENTED` and **stores nothing**. Multi-turn chat is Phase 5. Use `POST /rag/answer` for a single grounded answer.
+
+---
+
+## Retrieval and RAG (Phase 4)
+
+| Method | Path | Capability |
+|---|---|---|
+| POST | `/retrieval/search` | `manual.read` |
+| POST | `/rag/answer` | `manual.read` |
+| POST | `/rag/debug` | `audit_log.read` |
+
+```json
+{ "query": "Why is error E-104 appearing during hydraulic startup?",
+  "machineModelId": "<24-hex id>",
+  "machineId": "<optional>",
+  "manualId": "<optional>",
+  "manualVersion": "2.1" }
+```
+
+→ `200` `{ status, answer, confidence, evidenceSufficient, query, scope, sources[], retrieval, warnings[] }`.
+
+`status` is one of `answered | clarification_required | insufficient_evidence | conflicting_evidence | processing_unavailable | generation_failed` (search may also return `retrieved`). Missing machine model on a troubleshooting query is **200 + clarification**, not 422.
+
+Citations in `sources[]` are filled from retrieved metadata (`manualTitle`, `manualVersion`, `pageStart`/`pageEnd`, `sectionTitle`). The model is not trusted to invent them.
+
+Internal FastAPI equivalents (token-guarded, never browser-reachable): `POST /internal/v1/retrieval/search`, `POST /internal/v1/rag/answer`, `GET /internal/v1/rag/health`.
+
+Rate limit: `RAG_RATE_LIMIT_MAX` / `RAG_RATE_LIMIT_WINDOW_MINUTES` (default 30/min). FastAPI unreachable → `503 DEPENDENCY_UNAVAILABLE`.
 
 ---
 
@@ -241,4 +269,4 @@ Technicians and viewers see only their own conversations; another user's returns
 | GET | `/system/info` | Version, phase, and the feature flags. |
 | GET | `/healthz` | Unversioned alias for container healthchecks. |
 
-`/system/info` reports `authentication: true` and every document/AI flag `false`.
+`/system/info` reports Phase 4 flags: `vectorSearch` and `ragAnswers` true; `incidentMemory` false.
