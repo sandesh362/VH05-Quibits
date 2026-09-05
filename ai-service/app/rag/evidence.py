@@ -51,6 +51,45 @@ REFUSAL_MESSAGES = {
     ),
 }
 
+# A machine model being selected must not turn the assistant into a general
+# purpose chatbot.  Semantic embeddings can return a numerically similar
+# manual passage for a completely unrelated question (for example, a question
+# about a celebrity).  Keep this deliberately broad: it is only an early
+# rejection for queries with *no* machine/manual signal at all.  Evidence
+# relevance is still decided by the normal ranking and sufficiency checks.
+_MACHINE_CONTEXT = re.compile(
+    r"\b(?:machine|manual|maintenance|service|repair|troubleshoot|diagnos|"
+    r"fault|alarm|error|code|electrical|mechanical|hydraulic|pneumatic|"
+    r"pressure|voltage|current|temperature|motor|pump|valve|sensor|"
+    r"controller|plc|drive|spindle|tool|bearing|lubricat|coolant|"
+    r"configuration|parameter|setting|specification|install|replace|"
+    r"calibrat|inspect|operate|startup|shutdown)\b",
+    re.IGNORECASE,
+)
+
+
+def has_machine_or_manual_context(extracted: ExtractedQuery) -> bool:
+    """Return whether a question is plausibly within this assistant's scope.
+
+    Identifiers and extracted components are strong signals.  The keyword
+    fallback supports plain-language questions such as "when is maintenance
+    due?" without treating arbitrary conversational questions as manual RAG.
+    """
+    if any(
+        (
+            extracted.error_codes,
+            extracted.part_numbers,
+            extracted.model_numbers,
+            extracted.units,
+            extracted.technical_terms,
+            extracted.component_names,
+            extracted.symptoms,
+            extracted.named_manual,
+        )
+    ):
+        return True
+    return bool(_MACHINE_CONTEXT.search(extracted.normalized))
+
 
 def clarification_required(reason: str, message: str | None = None) -> EvidenceDecision:
     return EvidenceDecision(
@@ -133,6 +172,23 @@ def select_evidence(
 ) -> EvidenceDecision:
     """Choose the context set and decide whether generation is allowed."""
     warnings: list[str] = []
+
+    # Do this before accepting a semantic hit.  A selected machine gives
+    # retrieval scope; it is not evidence that every user question concerns
+    # that machine.
+    if not has_machine_or_manual_context(extracted):
+        return EvidenceDecision(
+            sufficient=False,
+            status="insufficient_evidence",
+            reason=INSUFFICIENT_EVIDENCE,
+            message=(
+                "No relevant evidence was found in the available machine manuals. "
+                "I can help only with technical questions about the selected machine "
+                "or its documentation."
+            ),
+            warnings=warnings,
+            selected=[],
+        )
 
     eligible: list[RetrievalHit] = []
     for hit in ranked:

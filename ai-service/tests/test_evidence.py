@@ -66,6 +66,22 @@ def test_insufficient_when_nothing_relevant() -> None:
     assert decision.status == "insufficient_evidence"
 
 
+def test_non_technical_question_is_refused_even_with_a_strong_semantic_hit() -> None:
+    """A selected model must not make this a general-purpose chat assistant."""
+    extracted = normalize_query("Tell me about Shah Rukh Khan")
+    decision = select_evidence(
+        [_hit(exact_match=False, matched_terms=[], semantic_score=0.99, final_score=0.99)],
+        extracted,
+        ScopeFilter(machine_model_id=MODEL_A),
+        rag_runtime_config(),
+    )
+    assert decision.sufficient is False
+    assert decision.status == "insufficient_evidence"
+    assert decision.selected == []
+    assert decision.message is not None
+    assert "No relevant evidence" in decision.message
+
+
 def test_missing_metadata_rejected() -> None:
     extracted = normalize_query("error E-104")
     bare = _hit(manual_title="", page_start=0)
