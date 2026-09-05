@@ -682,6 +682,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
             temperature=deps.config.temperature,
             max_tokens=deps.config.max_output_tokens,
             timeout_s=deps.config.request_timeout_ms / 1000,
+            allowed_source_ids=[s.source_id for s in all_source_refs],
         )
     except ServiceError as exc:
         return empty_answer(
@@ -721,6 +722,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
                 temperature=0.0,
                 max_tokens=deps.config.max_output_tokens,
                 timeout_s=deps.config.request_timeout_ms / 1000,
+                allowed_source_ids=[s.source_id for s in all_source_refs],
             )
             parsed = parse_model_json(raw)
             regenerated = True
@@ -777,6 +779,7 @@ async def run_answer(req: PipelineRequest, deps: PipelineDeps) -> RagAnswer:
                 temperature=0.0,
                 max_tokens=deps.config.max_output_tokens,
                 timeout_s=deps.config.request_timeout_ms / 1000,
+                allowed_source_ids=[s.source_id for s in all_source_refs],
             )
             parsed_retry = parse_model_json(raw)
             regenerated = True

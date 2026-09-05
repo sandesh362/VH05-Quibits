@@ -19,6 +19,32 @@ from app.rag.citations import parse_model_json
 log = get_logger()
 
 
+def _answer_schema(allowed_source_ids: list[str]) -> dict[str, Any]:
+    """Constrain Ollama to the answer contract and retrieved source IDs only."""
+    return {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string"},
+            "likely_causes": {"type": "array", "items": {"type": "string"}},
+            "recommended_checks": {"type": "array", "items": {"type": "string"}},
+            "safety_notes": {"type": "array", "items": {"type": "string"}},
+            "when_to_escalate": {"type": "string"},
+            "cited_source_ids": {
+                "type": "array",
+                "items": {"type": "string", "enum": allowed_source_ids},
+            },
+            "evidence_insufficient": {"type": "boolean"},
+            "notes_on_conflicts": {"type": "string"},
+        },
+        "required": [
+            "summary", "likely_causes", "recommended_checks", "safety_notes",
+            "when_to_escalate", "cited_source_ids", "evidence_insufficient",
+            "notes_on_conflicts",
+        ],
+        "additionalProperties": False,
+    }
+
+
 class OllamaChatClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -65,6 +91,7 @@ class OllamaChatClient:
         max_tokens: int,
         timeout_s: float,
         model: str | None = None,
+        allowed_source_ids: list[str] | None = None,
     ) -> str:
         chat_model = model or self.settings.OLLAMA_CHAT_MODEL
         if not chat_model:
@@ -81,6 +108,8 @@ class OllamaChatClient:
                 "num_predict": max_tokens,
             },
         }
+        if allowed_source_ids:
+            payload["format"] = _answer_schema(allowed_source_ids)
         try:
             async with httpx.AsyncClient(timeout=timeout_s) as client:
                 response = await client.post(f"{self.base_url}/api/chat", json=payload)
@@ -135,6 +164,7 @@ class ScriptedGenerator:
         max_tokens: int,
         timeout_s: float,
         model: str | None = None,
+        allowed_source_ids: list[str] | None = None,
     ) -> str:
         self.calls.append(messages)
         if self.error:

@@ -2,7 +2,7 @@
  * Profile: session details, capability summary, offline sync management,
  * local cache controls and sign out.
  */
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
@@ -11,7 +11,7 @@ import { useSyncStatus } from '@/hooks/queries';
 import { useSyncEngine } from '@/hooks/use-sync';
 import { useNetwork } from '@/hooks/use-network';
 import { capabilitiesOf } from '@/lib/permissions';
-import { Badge, Button, Card, Chip, KeyValue, SectionTitle } from '@/components/ui';
+import { Button, Card, Chip, KeyValue, SectionTitle } from '@/components/ui';
 import { ConfirmDialog } from '@/components/banners';
 import { OutboxOpRow, type OutboxOpView } from '@/components/list-rows';
 import { EmptyState } from '@/components/states';
@@ -21,12 +21,10 @@ import { cacheClear } from '@/db/cache';
 import { env } from '@/config/env';
 import { formatDateTime, relativeTime } from '@/lib/format';
 import { errorMessage } from '@/api/errors';
-import { spacing, type as typeScale } from '@/theme/tokens';
-import { useTheme } from '@/theme/theme-context';
+import { colors, spacing, type as typeScale } from '@/theme/tokens';
 
 export default function ProfileScreen(): React.JSX.Element {
   const { user, logout } = useAuth();
-  const { colors, isDark, toggleTheme } = useTheme();
   const { isOnline } = useNetwork();
   const userId = user?.id ?? '';
   // The profile IS the sync status screen: keep the counts live while here.
@@ -35,12 +33,6 @@ export default function ProfileScreen(): React.JSX.Element {
   const [signOutVisible, setSignOutVisible] = useState(false);
   const [clearCacheVisible, setClearCacheVisible] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const initials = (user?.fullName ?? user?.username ?? 'U')
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join('');
 
   const onRetryOp = (op: OutboxOpView) => {
     retryOp(op.id);
@@ -64,7 +56,7 @@ export default function ProfileScreen(): React.JSX.Element {
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.bg }]} edges={['bottom']}>
+    <SafeAreaView style={styles.screen} edges={['bottom']}>
       <Stack.Screen
         options={{
           headerShown: true,
@@ -75,44 +67,6 @@ export default function ProfileScreen(): React.JSX.Element {
         }}
       />
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.profileHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={[styles.avatar, { backgroundColor: colors.primaryBg, borderColor: colors.primary }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>{initials || 'U'}</Text>
-          </View>
-          <View style={styles.heroText}>
-            <Text style={[styles.name, { color: colors.text }]} numberOfLines={1}>{user?.fullName ?? 'User'}</Text>
-            <Text style={[styles.username, { color: colors.textMuted }]} numberOfLines={1}>@{user?.username ?? 'account'}</Text>
-            <View style={styles.heroBadges}>
-              <Badge icon="●" label={isOnline ? 'Online' : 'Offline'} tone={isOnline ? 'ok' : 'warn'} size="sm" />
-              <Badge icon="◆" label={user?.role ?? 'Role'} tone="info" size="sm" />
-            </View>
-          </View>
-        </View>
-
-        <SectionTitle>Appearance</SectionTitle>
-        <Card>
-          <View style={styles.appearanceRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Theme</Text>
-              <Text style={[styles.body, { color: colors.textMuted }]}>Switch between a bright workspace and the low-light field view.</Text>
-            </View>
-            <Pressable
-              accessibilityRole="switch"
-              accessibilityState={{ checked: isDark }}
-              accessibilityLabel="Toggle dark mode"
-              onPress={toggleTheme}
-              style={[styles.themeToggle, { backgroundColor: colors.surfaceRaised, borderColor: colors.borderStrong }]}
-            >
-              <View style={[styles.togglePill, !isDark && { backgroundColor: colors.primary }]}>
-                <Text style={[styles.toggleText, { color: !isDark ? colors.onPrimary : colors.textMuted }]}>Light</Text>
-              </View>
-              <View style={[styles.togglePill, isDark && { backgroundColor: colors.primary }]}>
-                <Text style={[styles.toggleText, { color: isDark ? '#ffffff' : colors.textMuted }]}>Dark</Text>
-              </View>
-            </Pressable>
-          </View>
-        </Card>
-
         <SectionTitle>Account</SectionTitle>
         <Card>
           <KeyValue label="Name" value={user?.fullName ?? '—'} />
@@ -121,7 +75,7 @@ export default function ProfileScreen(): React.JSX.Element {
           <KeyValue label="Role" value={user?.role ?? '—'} />
           <KeyValue label="Last sign-in" value={formatDateTime(user?.lastLoginAt)} />
           {user?.mustChangePassword ? (
-            <Text style={[styles.warning, { color: colors.warn }]}>
+            <Text style={styles.warning}>
               You must change your password (web app or administrator). This banner stays until then.
             </Text>
           ) : null}
@@ -129,7 +83,7 @@ export default function ProfileScreen(): React.JSX.Element {
 
         <SectionTitle>Permissions</SectionTitle>
         <Card>
-          <Text style={[styles.body, { color: colors.textMuted }]}>Effective capabilities for role “{user?.role}” (the server enforces these):</Text>
+          <Text style={styles.body}>Effective capabilities for role “{user?.role}” (the server enforces these):</Text>
           <View style={styles.capabilityWrap}>
             {capabilitiesOf(user?.role)
               .slice(0, 24)
@@ -141,22 +95,11 @@ export default function ProfileScreen(): React.JSX.Element {
 
         <SectionTitle>Offline sync</SectionTitle>
         <Card>
-          <View style={styles.syncSummary}>
-            <View style={[styles.syncTile, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-              <Text style={[styles.syncNumber, { color: colors.warn }]}>{sync.data?.pending ?? 0}</Text>
-              <Text style={[styles.syncLabel, { color: colors.textMuted }]}>Pending</Text>
-            </View>
-            <View style={[styles.syncTile, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-              <Text style={[styles.syncNumber, { color: colors.error }]}>{sync.data?.failed ?? 0}</Text>
-              <Text style={[styles.syncLabel, { color: colors.textMuted }]}>Failed</Text>
-            </View>
-            <View style={[styles.syncTile, { backgroundColor: colors.surfaceRaised, borderColor: colors.border }]}>
-              <Text style={[styles.syncNumber, { color: colors.info }]}>{sync.data?.review ?? 0}</Text>
-              <Text style={[styles.syncLabel, { color: colors.textMuted }]}>Review</Text>
-            </View>
-          </View>
           <KeyValue label="Connection" value={isOnline ? 'Online' : 'Offline'} />
           <KeyValue label="Last completed sync" value={relativeTime(sync.data?.lastSyncAt)} />
+          <KeyValue label="Pending" value={String(sync.data?.pending ?? 0)} />
+          <KeyValue label="Failed" value={String(sync.data?.failed ?? 0)} />
+          <KeyValue label="Needs review" value={String(sync.data?.review ?? 0)} />
           <Button
             label="Sync now"
             variant="secondary"
@@ -186,12 +129,12 @@ export default function ProfileScreen(): React.JSX.Element {
 
         <SectionTitle>Local storage</SectionTitle>
         <Card>
-          <Text style={[styles.body, { color: colors.textMuted }]}>
+          <Text style={styles.body}>
             This device caches recently viewed machines, incidents and conversations (short expiry,
             tied to your account) so you can keep working without signal. Tokens live in the device
             keystore, never in this cache.
           </Text>
-          <View style={{ height: spacing.md }} />
+          <View style={{ height: spacing.sm }} />
           <Button label="Clear cached copies" variant="secondary" onPress={() => setClearCacheVisible(true)} />
         </Card>
 
@@ -250,58 +193,9 @@ export default function ProfileScreen(): React.JSX.Element {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
+  screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.md, paddingBottom: spacing.xl },
-  profileHero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  avatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { fontSize: 24, fontWeight: '800' },
-  heroText: { flex: 1 },
-  name: { fontSize: typeScale.title, fontWeight: '800' },
-  username: { fontSize: typeScale.small, marginTop: 2 },
-  heroBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
-  appearanceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  cardTitle: { fontSize: typeScale.subheading, fontWeight: '700', marginBottom: 4 },
-  themeToggle: {
-    flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: 999,
-    padding: 3,
-    minHeight: 44,
-  },
-  togglePill: {
-    minWidth: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-  },
-  toggleText: { fontSize: typeScale.tiny, fontWeight: '800' },
-  body: { fontSize: typeScale.small, lineHeight: 20 },
-  warning: { fontSize: typeScale.small, marginTop: spacing.sm },
+  body: { color: colors.textMuted, fontSize: typeScale.small, lineHeight: 20 },
+  warning: { color: colors.warn, fontSize: typeScale.small, marginTop: spacing.sm },
   capabilityWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm },
-  syncSummary: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  syncTile: {
-    flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-  },
-  syncNumber: { fontSize: 22, fontWeight: '800' },
-  syncLabel: { fontSize: typeScale.tiny, fontWeight: '700', marginTop: 2 },
 });

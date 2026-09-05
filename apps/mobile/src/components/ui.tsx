@@ -6,8 +6,7 @@
  * Badge renders icon + label + tone.
  */
 import { Pressable, StyleSheet, Text, TextInput, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
-import { minTouchTarget, radius, spacing, type as typeScale, type Tone } from '@/theme/tokens';
-import { useTheme } from '@/theme/theme-context';
+import { colors, minTouchTarget, radius, spacing, toneBg, toneColor, type as typeScale, type Tone } from '@/theme/tokens';
 
 // --- Button -----------------------------------------------------------------
 
@@ -34,7 +33,6 @@ export function Button({
   testID,
   accessibilityLabel,
 }: ButtonProps): React.JSX.Element {
-  const { colors } = useTheme();
   const isDanger = variant === 'danger';
   const isGhost = variant === 'ghost';
   const bg = isDanger ? colors.errorBg : isGhost ? 'transparent' : variant === 'primary' ? colors.primary : colors.surfaceRaised;
@@ -73,9 +71,8 @@ export function Card({
   style?: StyleProp<ViewStyle>;
   testID?: string;
 }): React.JSX.Element {
-  const { colors } = useTheme();
   return (
-    <View testID={testID} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }, style]}>
+    <View testID={testID} style={[styles.card, style]}>
       {children}
     </View>
   );
@@ -92,9 +89,8 @@ export interface BadgeProps {
 }
 
 export function Badge({ icon, label, tone, size = 'md', testID }: BadgeProps): React.JSX.Element {
-  const { colors } = useTheme();
-  const bg = colors[`${tone}Bg`];
-  const fg = colors[tone];
+  const bg = toneBg[tone];
+  const fg = toneColor[tone];
   return (
     <View
       testID={testID}
@@ -139,14 +135,13 @@ export function ChoiceGroup<T extends string>({
   error,
   testID,
 }: ChoiceGroupProps<T>): React.JSX.Element {
-  const { colors } = useTheme();
   return (
     <View style={styles.fieldGroup} testID={testID}>
-      <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
+      <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.choiceRow}>
         {options.map((option) => {
           const selected = option.value === value;
-          const toneColorValue = option.tone ? colors[option.tone] : colors.primary;
+          const toneColorValue = option.tone ? toneColor[option.tone] : colors.primary;
           return (
             <Pressable
               key={option.value}
@@ -158,7 +153,7 @@ export function ChoiceGroup<T extends string>({
                 styles.choice,
                 {
                   borderColor: selected ? toneColorValue : colors.borderStrong,
-                  backgroundColor: selected ? colors[`${option.tone ?? 'info'}Bg`] : colors.surface,
+                  backgroundColor: selected ? toneBg[option.tone ?? 'info'] : colors.surface,
                 },
               ]}
             >
@@ -217,22 +212,13 @@ export function TextField({
   testID,
   style,
 }: TextFieldProps): React.JSX.Element {
-  const { colors } = useTheme();
   return (
     <View style={[styles.fieldGroup, style]}>
-      <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>{label}</Text>
+      <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         testID={testID}
         accessibilityLabel={accessibilityLabel ?? label}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.surfaceRaised,
-            borderColor: error ? colors.error : colors.borderStrong,
-            color: colors.text,
-          },
-          multiline && styles.inputMultiline,
-        ]}
+        style={[styles.input, multiline && styles.inputMultiline, error ? styles.inputError : null]}
         value={value}
         onChangeText={onChangeText}
         onBlur={onBlur}
@@ -245,7 +231,7 @@ export function TextField({
         multiline={multiline}
         textAlignVertical={multiline ? 'top' : 'center'}
       />
-      {error ? <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text> : null}
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -253,16 +239,14 @@ export function TextField({
 // --- Section title / key-value ------------------------------------------------------------
 
 export function SectionTitle({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const { colors } = useTheme();
-  return <Text style={[styles.sectionTitle, { color: colors.text }]}>{children}</Text>;
+  return <Text style={styles.sectionTitle}>{children}</Text>;
 }
 
 export function KeyValue({ label, value }: { label: string; value: React.ReactNode }): React.JSX.Element {
-  const { colors } = useTheme();
   return (
     <View style={styles.kvRow}>
-      <Text style={[styles.kvLabel, { color: colors.textMuted }]}>{label}</Text>
-      <Text style={[styles.kvValue, { color: colors.text }]}>{value ?? '—'}</Text>
+      <Text style={styles.kvLabel}>{label}</Text>
+      <Text style={styles.kvValue}>{value ?? '—'}</Text>
     </View>
   );
 }
@@ -282,38 +266,31 @@ export function StatTile({
   onPress?: () => void;
   testID?: string;
 }): React.JSX.Element {
-  const { colors } = useTheme();
   const content = (
     <>
-      <Text style={[styles.statCount, { color: colors[tone] }]} testID={testID ? `${testID}-count` : undefined}>
+      <Text style={[styles.statCount, { color: toneColor[tone] }]} testID={testID ? `${testID}-count` : undefined}>
         {count === null ? '—' : String(count)}
       </Text>
-      <Text style={[styles.statLabel, { color: colors.textMuted }]}>{label}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
     </>
   );
   if (onPress) {
     return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label}: ${count ?? 'unknown'}`}
-        onPress={onPress}
-        style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      >
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${count ?? 'unknown'}`} onPress={onPress} style={styles.statTile}>
         {content}
       </Pressable>
     );
   }
-  return <View style={[styles.statTile, { backgroundColor: colors.surface, borderColor: colors.border }]}>{content}</View>;
+  return <View style={styles.statTile}>{content}</View>;
 }
 
 // --- Chip (static label chip) -----------------------------------------------------------------
 
 export function Chip({ icon, label, tone = 'neutral' }: { icon?: string; label: string; tone?: Tone }): React.JSX.Element {
-  const { colors } = useTheme();
   return (
-    <View style={[styles.chip, { backgroundColor: colors[`${tone}Bg`], borderColor: colors[tone] }]}>
-      {icon ? <Text style={{ color: colors[tone], marginRight: 4 }} aria-hidden>{icon}</Text> : null}
-      <Text style={{ color: colors[tone], fontSize: typeScale.small }}>{label}</Text>
+    <View style={[styles.chip, { backgroundColor: toneBg[tone], borderColor: toneColor[tone] }]}>
+      {icon ? <Text style={{ color: toneColor[tone], marginRight: 4 }} aria-hidden>{icon}</Text> : null}
+      <Text style={{ color: toneColor[tone], fontSize: typeScale.small }}>{label}</Text>
     </View>
   );
 }
@@ -336,6 +313,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   card: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     padding: spacing.md,
@@ -360,17 +339,22 @@ const styles = StyleSheet.create({
   badgeLabel: { fontSize: typeScale.small, fontWeight: '600' },
   badgeLabelSm: { fontSize: typeScale.tiny },
   fieldGroup: { marginBottom: spacing.md },
-  fieldLabel: { fontSize: typeScale.small, marginBottom: spacing.xs },
+  fieldLabel: { color: colors.textMuted, fontSize: typeScale.small, marginBottom: spacing.xs },
   input: {
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.borderStrong,
     borderWidth: 1,
     borderRadius: radius.sm,
+    color: colors.text,
     fontSize: typeScale.body,
     paddingHorizontal: 12,
     minHeight: minTouchTarget,
   },
   inputMultiline: { minHeight: 100, paddingTop: 10 },
-  errorText: { fontSize: typeScale.small, marginTop: spacing.xs },
+  inputError: { borderColor: colors.error },
+  errorText: { color: colors.error, fontSize: typeScale.small, marginTop: spacing.xs },
   sectionTitle: {
+    color: colors.text,
     fontSize: typeScale.heading,
     fontWeight: '700',
     marginTop: spacing.sm,
@@ -382,10 +366,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     gap: spacing.md,
   },
-  kvLabel: { fontSize: typeScale.small, flexShrink: 0 },
-  kvValue: { fontSize: typeScale.small, textAlign: 'right', flexShrink: 1 },
+  kvLabel: { color: colors.textMuted, fontSize: typeScale.small, flexShrink: 0 },
+  kvValue: { color: colors.text, fontSize: typeScale.small, textAlign: 'right', flexShrink: 1 },
   statTile: {
     flex: 1,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.md,
     padding: spacing.md,
@@ -394,7 +380,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   statCount: { fontSize: 28, fontWeight: '700' },
-  statLabel: { fontSize: typeScale.tiny, textAlign: 'center', marginTop: 4 },
+  statLabel: { color: colors.textMuted, fontSize: typeScale.tiny, textAlign: 'center', marginTop: 4 },
   choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   choice: {
     flexDirection: 'row',

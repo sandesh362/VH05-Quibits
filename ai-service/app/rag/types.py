@@ -493,6 +493,7 @@ class ChatGenerator(Protocol):
         temperature: float,
         max_tokens: int,
         timeout_s: float,
+        allowed_source_ids: list[str] | None = None,
     ) -> str: ...
 
     async def ensure_chat_model(self, model: str) -> None: ...
